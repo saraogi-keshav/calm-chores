@@ -1,0 +1,14 @@
+{
+  "name": "calmchores",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node Database/schemas.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "firebase": "^10.14.0",
+    "uuid": "^10.0.0"
+  }
+}
