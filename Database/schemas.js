@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, getDoc, query, where } from 'firebase/firestore';
+import { collection, addDoc, doc, getDocs, getDoc, query, where } from 'firebase/firestore';
 import { db, auth } from './firebase.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -196,7 +196,7 @@ export async function rating(rated_user_id, rating_score, comment=null) {
         //const rated_by = auth.currentUser.uid;
         const rated_by = "GlYiqNBr3sVqlfLmhuQI"
 
-        const rating_docRef = doc(collection(db, "rating"), {
+        const rating_docRef = await addDoc(collection(db, "rating"), {
             rating_id: uuidv4(),
             rated_by: rated_by,
             rated_user: rated_user_id,
@@ -213,7 +213,7 @@ export async function rating(rated_user_id, rating_score, comment=null) {
 }
 
 //testing
-rating("IAfLUzafTQStmdLTbD6U", "4", "done everything well")
+rating("IAfLUzafTQStmdLTbD6U", 4, "done everything well")
     .then(rate => {
         console.log("rated not loading: ", rate);
     })
@@ -235,10 +235,13 @@ export async function addMaintenanceRequest(description, priority="Medium", stat
                             where("house_id", "==", house_id)
         );
 
-        const landlordDoc = await getDoc(landlordRef);
-        const {landlord_id} = landlordDoc.data();
+        const landlordDoc = await getDocs(landlordRef);
+        let landlord_id = null;
+        landlordDoc.forEach(doc => {
+            landlord_id = doc.id;
+        });
 
-        const maintenance_request_docRef = doc(collection(db, "maintenance_requests"), {
+        const maintenance_request_docRef = await addDoc(collection(db, "maintenance_requests"), {
             request_id: uuidv4(),
             house_id: house_id,
             house_unit: house_unit,
@@ -279,7 +282,7 @@ addMaintenanceRequest("leaking in the kitchen", "high", "pending")
 //         const userDoc = await getDoc(userRef);
 //         const {chore_id} = userDoc.data();
 
-//         const reward_docRef = doc(collection(db, "reward_points"), {
+//         const reward_docRef = addDoc(collection(db, "reward_points"), {
 //             points_id: uuidv4(),
 //             user_id: user_id,
 //             chore_id: chore_id,
