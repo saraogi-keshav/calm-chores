@@ -1,7 +1,6 @@
-import { collection, addDoc, doc, getDocs, getDoc, query, where } from 'firebase/firestore';
-import { db, auth } from './firebase.js';
+import { collection, addDoc, doc, getDocs, getDoc, query, where, updateDoc } from 'firebase/firestore';
+import { db } from './firebase.js';
 import { v4 as uuidv4 } from 'uuid';
-
 
 //user table
 export async function addUser(name, email, passwordHash, profileType, house_id=null, house_unit=null, chore_id=null) {
@@ -270,6 +269,93 @@ addMaintenanceRequest("leaking in the kitchen", "high", "pending")
     .catch(error => {
         console.log("error:", error)
     })
+
+// update rating in user table
+export async function updateUserRating(user_id, new_rating) {
+    try {
+        const userRef = doc(db, "users", user_id);
+        await updateDoc(userRef, {
+        rating: new_rating,
+        updated_at: new Date()
+        });
+        console.log('User rating updated');
+    } catch (error) {
+        console.error('Error updating user rating:', error);
+        throw error;
+    }
+}
+
+// testing updateUserRating function
+const testUserId = "PnW1e409Oysb5lzOp5QH";
+const newRating = 4.5;
+
+updateUserRating(testUserId, newRating)
+  .then(() => {
+    console.log(`User rating updated successfully: ${testUserId}`);
+  })
+  .catch(error => {
+    console.log("Error updating user rating:", error);
+  });
+
+// update calculations in the rating table
+export async function updateRatingCalculation(rating_id, rating_score, comment = null) {
+    try {
+      const ratingRef = doc(db, "rating", rating_id);
+      await updateDoc(ratingRef, {
+        rating_score: rating_score,
+        comment: comment,
+        updated_at: new Date()
+      });
+      console.log('Rating updated');
+    } catch (error) {
+      console.error('Error updating rating:', error);
+      throw error;
+    }
+  }
+
+// testing updateRatingCalculation function
+const testRatingId = "Nw1Zt2KnmLOXeAEMDNrn";
+const updatedRatingScore = 4;
+const ratingComment = "Great job, well done!";
+
+updateRatingCalculation(testRatingId, updatedRatingScore, ratingComment)
+  .then(() => {
+    console.log(`Rating updated successfully: ${testRatingId}`);
+  })
+  .catch(error => {
+    console.log("Error updating rating:", error);
+  });
+
+
+// update the maintainance table when the status changes
+export async function updateMaintenanceStatus(request_id, new_status, updated_by) {
+    try {
+        const requestRef = doc(db, "maintenance_requests", request_id);
+        await updateDoc(requestRef, {
+        status: new_status,
+        updated_by: updated_by,
+        updated_at: new Date()
+        });
+        console.log('Maintenance request status updated');
+    } catch (error) {
+        console.error('Error updating maintenance request status:', error);
+        throw error;
+    }
+}
+
+
+// Testing updateMaintenanceStatus function
+const testRequestId = "gSC63q1E0sLQfAqPtRQD";
+const newStatus = "Completed";
+const updatedBy = "landlord_123";
+
+updateMaintenanceStatus(testRequestId, newStatus, updatedBy)
+  .then(() => {
+    console.log(`Maintenance request status updated successfully ${testRequestId}`);
+  })
+  .catch(error => {
+    console.log("Error updating maintenance request status:", error);
+  });
 
 
 // rewards table
