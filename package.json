@@ -1,14 +1,17 @@
 {
   "name": "calmchores",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node Database/schemas.js"
+    "start": "node server.js"
   },
   "dependencies": {
+    "axios": "^1.7.7",
     "dotenv": "^16.4.5",
+    "express": "^4.21.0",
     "firebase": "^10.14.0",
+    "node-fetch": "^3.3.2",
     "uuid": "^10.0.0"
   }
 }
