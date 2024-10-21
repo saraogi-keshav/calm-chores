@@ -45,3 +45,26 @@ app.post('/addChore', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
+// Route to update an existing chore
+app.put('/updateChore/:chore_id', async (req, res) => {
+  const { chore_id } = req.params;
+  const { chore_name, due_date, status, recurring, frequency } = req.body;
+  try {
+    await updateChore(chore_id, chore_name, due_date, status, recurring, frequency);
+    res.status(200).json({ message: "Chore updated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Route to delete an existing chore
+app.delete('/deleteChore/:chore_id', async (req, res) => {
+  const { chore_id } = req.params;
+  try {
+    await deleteChore(chore_id);
+    res.status(200).json({ message: "Chore deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});

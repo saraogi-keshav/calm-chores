@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, getDocs, getDoc, query, where, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDocs, getDoc, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -82,44 +82,7 @@ addHouse(house_name, houseUnit, address)
         console.error("Failed to add house ID:", error);
     });
 
-//add chores
-export async function addChore(chore_name, due_date, recurring=true, frequency) {
-    try {
-        //const user_id = auth.currentUser.uid;
-        const user_id = "7eOgsYOB2gWMEdkMqbuP"
 
-        const userRef = doc(db, "users", user_id);
-        const userDoc = await getDoc(userRef);
-        const { house_id, house_unit } = userDoc.data();
-
-        const chore_docRef = await addDoc(collection(db, "chores"), {
-            chore_id: uuidv4(),
-            //added hosue id and unit
-            house_id: house_id,
-            house_unit: house_unit,
-            chore_name: chore_name,
-            due_date: due_date,
-            recurring: recurring,
-            frequency: frequency,
-            created_by: user_id,
-            created_at: new Date()
-        });
-
-        console.log('chore created id:', chore_docRef.id);
-        return chore_docRef;
-    } catch (error) {
-        console.error('Error adding chore: ', error);
-    }
-}
-
-//testing
-addChore("Clean up", "12/12/2024", false, "weekly")
-    .then(chore => {
-        console.log("chore added:", chore);
-    })
-    .catch(error => {
-        console.log("Error adding:", error);
-    });
 
 export async function assignChore(status = "Pending", verified_by=null) {
     try {
@@ -151,7 +114,7 @@ export async function assignChore(status = "Pending", verified_by=null) {
 //testing
 assignChore("pending","user 1")
     .then(chore => {
-        console.log("assigned chore:", chore);
+        console.log("Assigned chore:", chore);
     })
     .catch(error => {
         console.log("Error adding:", error);
@@ -306,7 +269,7 @@ export async function updateRatingCalculation(rating_id, rating_score, comment =
         comment: comment,
         updated_at: new Date()
       });
-      console.log('Rating updated');
+      console.log(`Rating updated: ${rating_id}`);
     } catch (error) {
       console.error('Error updating rating:', error);
       throw error;
@@ -351,34 +314,98 @@ const updatedBy = "landlord_123";
 
 updateMaintenanceStatus(testRequestId, newStatus, updatedBy)
   .then(() => {
-    console.log(`Maintenance request status updated successfully ${testRequestId}`);
+    console.log(`Maintenance request status updated successfully: ${testRequestId}`);
   })
   .catch(error => {
     console.log("Error updating maintenance request status:", error);
   });
-
-
-// rewards table
-// rethink about having this table and feature
-// need to check user rewards point in user table need to add reward point key value 
-// export async function addRewardPoints(points, reason) {
-//     try {
-//         const user_id = auth.currentUser.uid;
-//         const userRef = doc(db, "users", user_id);
-//         const userDoc = await getDoc(userRef);
-//         const {chore_id} = userDoc.data();
-
-//         const reward_docRef = addDoc(collection(db, "reward_points"), {
-//             points_id: uuidv4(),
-//             user_id: user_id,
-//             chore_id: chore_id,
-//             points: points,
-//             reason: reason,
-//             created_at: new Date()
-//         });
-//         console.log("reward id", reward_docRef.id);
-//         return reward_docRef;
-//     } catch (error) {
-//         console.error('Error adding reward points: ', error);
-//     }
-// }
+  
+  // Add a new chore to Firestore
+  export async function addChore(chore_name, due_date, recurring = true, frequency) {
+      try {
+          const user_id = "7eOgsYOB2gWMEdkMqbuP"; // Mocked user ID for example
+          const userRef = doc(db, "users", user_id);
+          const userDoc = await getDoc(userRef);
+          const { house_id, house_unit } = userDoc.data();
+  
+          const chore_id = uuidv4(); // Generate the same ID for document and field
+  
+          // Set the document with chore_id as its ID
+          await setDoc(doc(db, "chores", chore_id), {
+              chore_id: chore_id,  // Same as document ID
+              house_id: house_id,
+              house_unit: house_unit,
+              chore_name: chore_name,
+              due_date: due_date,
+              recurring: recurring,
+              frequency: frequency,
+              created_by: user_id,
+              created_at: new Date()
+          });
+  
+          console.log('Chore created with ID:', chore_id);
+          return chore_id; // Return the chore_id (same as document ID)
+      } catch (error) {
+          console.error('Error adding chore:', error);
+      }
+  }
+  
+  // Update an existing chore in Firestore
+  export async function updateChore(chore_id, chore_name, due_date, status, recurring, frequency) {
+      try {
+          const choreRef = doc(db, "chores", chore_id); // Reference to the document
+          const choreDoc = await getDoc(choreRef); // Fetch the document
+  
+          if (!choreDoc.exists()) {
+              throw new Error(`No chore found with ID: ${chore_id}`);
+          }
+  
+          // Update the document with new data
+          await updateDoc(choreRef, {
+              chore_name: chore_name,
+              due_date: due_date,
+              status: status,
+              recurring: recurring,
+              frequency: frequency,
+              updated_at: new Date() // Track the time of the update
+          });
+  
+          console.log('Chore updated successfully:', chore_id);
+      } catch (error) {
+          console.error('Error updating chore:', error);
+      }
+  }
+  
+  // Delete an existing chore in Firestore
+  export async function deleteChore(chore_id) {
+      try {
+          const choreRef = doc(db, "chores", chore_id);
+          await deleteDoc(choreRef);
+          console.log('Chore deleted successfully:', chore_id);
+      } catch (error) {
+          console.error('Error deleting chore:', error);
+      }
+  }
+  
+  // The full workflow to add, update, and delete a chore using the same chore_id
+  async function manageChoreLifecycle() {
+      try {
+          // Step 1: Add a new chore
+          const choreId = await addChore("Clean up", "12/12/2024", false, "weekly");
+          console.log("Chore added with ID:", choreId);
+  
+          // Step 2: Update the same chore
+          await updateChore(choreId, "Updated Clean up", "2024-12-15", "Completed", true, "weekly");
+          console.log("Chore updated with ID:", choreId);
+  
+          // Step 3: Delete the same chore
+          await deleteChore(choreId);
+          console.log("Chore deleted with ID:", choreId);
+      } catch (error) {
+          console.error("Error in chore lifecycle:", error);
+      }
+  }
+  
+  // Execute the workflow
+  manageChoreLifecycle();
+  
