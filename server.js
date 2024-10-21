@@ -1,5 +1,5 @@
 import express from 'express';
-import { addUser, addHouse, addChore } from './Database/schemas.js';
+import { addUser, addHouse, addChore, rating} from './Database/schemas.js';
 import bodyParser from 'body-parser';
 
 const app = express();
@@ -17,6 +17,17 @@ app.post('/addUser', async (req, res) => {
     res.status(200).json({ userId });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+//Route to add rating
+app.post('/rating', async (req, res) => {
+  const { rated_user_id, rating_score, comment } = req.body;
+  try {
+    const rate = await rating(rated_user_id, rating_score, comment);
+    res.status(200).json({rate});
+  } catch (error) {
+    res.status(500).json({error: error.message});
   }
 });
 

@@ -5,23 +5,21 @@ import { v4 as uuidv4 } from 'uuid';
 //user table
 export async function addUser(name, email, passwordHash, profileType, house_id=null, house_unit=null, chore_id=null) {
   // validate profileType
-  if (!['Roommate', 'Landlord'].includes(profileType)) {
-    throw new Error("Invalid profile type. Must be 'Roommate' or 'Landlord'.");
-  }
-  try {
-    // Add user document to the 'users' collection
-    const user_docRef = await addDoc(collection(db, "users"), {
-    //   user_id: uuidv4(),
-      name: name,
-      email: email,
-      password_hash: passwordHash,
-      profile_type: profileType,
-      house_id: house_id,
-      house_unit: house_unit,
-      chore_id: chore_id,
-      //TODO: calculation of rating add a function in api file
-      rating: 0,
-      created_at: new Date()
+    if (!['Roommate', 'Landlord'].includes(profileType)) {
+        throw new Error("Invalid profile type. Must be 'Roommate' or 'Landlord'.");
+    }
+    try {
+        // Add user document to the 'users' collection
+        const user_docRef = await addDoc(collection(db, "users"), {
+        name: name,
+        email: email,
+        password_hash: passwordHash,
+        profile_type: profileType,
+        house_id: house_id,
+        house_unit: house_unit,
+        chore_id: chore_id,
+        rating: 0,
+        created_at: new Date()
     });
 
     console.log('User added with ID: ', user_docRef.id);
@@ -46,12 +44,108 @@ addUser(userName, userEmail, userPasswordHash, userProfileType)
     console.error("Failed to add user:", error);
   });
 
+const user = "test2";
+const email = "testing@test.com";
+const pw = "password";
+const type = "Roommate";
+  
+  // Call the function to add a user
+addUser(user, email, pw, type)
+    .then(userId => {
+      console.log(`User added with unique ID: ${userId}`);
+    })
+    .catch(error => {
+      console.error("Failed to add user:", error);
+    });
+
+
+//rating table
+export async function rating(rated_user_id, rating_score, comment=null) {
+    try {
+        //const rated_by = auth.currentUser.uid;
+        const rated_by = "Be2sm7Lz6bDuaZxqIofp"
+
+        const rating_docRef = await addDoc(collection(db, "rating"), {
+            rating_id: uuidv4(),
+            rated_by: rated_by,
+            rated_user: rated_user_id,
+            rating_score: rating_score,
+            comment: comment,
+            created_at: new Date()
+        });
+        console.log("Rating added:", rating_docRef.id);
+        return rating_docRef.id;
+    } catch (error) {
+        console.error('Error adding rating: ', error);
+    }
+}
+
+//testing
+rating("vBakUO026D4jOTKoCyfR", 5, "done everything well")
+    .then(rate => {
+        console.log("rated: ", rate);
+    })
+    .catch(error => {
+        console.log("error:", error)
+    });
+
+//calculate the rating for the users
+export async function calculateRating(user_id) {
+    try {
+        const ratingsRef = collection(db, "rating");
+        const getUserDocs = query(ratingsRef, where("rated_user", "==", user_id));
+        const getrating = await getDocs(getUserDocs);
+
+        let total = 0;
+        let count = 0;
+
+        getrating.forEach(doc => {
+            const data = doc.data();
+            total += data.rating_score;
+            count++;
+        });
+
+        const new_rating = (total/count).toFixed(2);
+        console.log(`User ${user_id} has an rating of: ${new_rating}`);
+
+        return new_rating;
+    } catch (error){
+        console.error("Error calculating rating", error);
+    }
+}
+
+// update rating in user table
+export async function updateUserRating(user_id) {
+    try {
+        const new_rating = await calculateRating(user_id);
+        const userRef = doc(db, "users", user_id);
+        await updateDoc(userRef, {
+        rating: new_rating
+        });
+        console.log('User rating updated');
+    } catch (error) {
+        console.error('Error updating user rating:', error);
+        throw error;
+    }
+}
+
+// testing updateUserRating function
+const testUserId = "vBakUO026D4jOTKoCyfR";
+updateUserRating(testUserId)
+  .then(() => {
+    console.log(`User rating updated successfully: ${testUserId}`);
+  })
+  .catch(error => {
+    console.log("Error updating user rating:", error);
+  });
+
+
 //house table
 export async function addHouse(house_name, house_unit, address) {
     try {
         //get the current user id
         // const userID = auth.currentUser.uid;
-        const userID = "1213"
+        const userID = "PVdRO5GXmVysIH1i7n3y"
 
         //add house info
         const house_docRef = await addDoc(collection(db, "houses"), {
@@ -83,15 +177,15 @@ addHouse(house_name, houseUnit, address)
     });
 
 
-
+//assign a chore
 export async function assignChore(status = "Pending", verified_by=null) {
     try {
         // const user_id = auth.currentUser.uid;
-        const user_id = "7eOgsYOB2gWMEdkMqbuP"
+        const user_id = "PVdRO5GXmVysIH1i7n3y"
 
         const userRef = doc(db, "users", user_id);
         const userDoc = await getDoc(userRef);
-        const {chore_id} = userDoc.data();
+        const { chore_id } = userDoc.data();
 
         const assignChore_docRef = await addDoc(collection(db, "chore_assignments"), {
             assignment_id: uuidv4(),
@@ -120,11 +214,12 @@ assignChore("pending","user 1")
         console.log("Error adding:", error);
     });
 
+
 //notification table
 export async function notification(message) {
     try {
         // const user_id = auth.currentUser.uid;
-        const user_id = "7eOgsYOB2gWMEdkMqbuP"
+        const user_id = "CNUo2LgQGG00HFuEsOWh"
         const userRef = doc(db, "users", user_id);
         const userDoc = await getDoc(userRef);
         const {chore_id} = userDoc.data();
@@ -152,42 +247,11 @@ notification("pay your bill before the due date.")
         console.log("Error:", error);
     });
 
-//rating table
-export async function rating(rated_user_id, rating_score, comment=null) {
-    try {
-        //const rated_by = auth.currentUser.uid;
-        const rated_by = "GlYiqNBr3sVqlfLmhuQI"
-
-        const rating_docRef = await addDoc(collection(db, "rating"), {
-            rating_id: uuidv4(),
-            rated_by: rated_by,
-            rated_user: rated_user_id,
-            //need a function to calculate the rating ?
-            rating_score: rating_score,
-            comment: comment,
-            created_at: new Date()
-        });
-        console.log("Rating added:", rating_docRef.id);
-        return rating_docRef.id;
-    } catch (error) {
-        console.error('Error adding rating: ', error);
-    }
-}
-
-//testing
-rating("IAfLUzafTQStmdLTbD6U", 4, "done everything well")
-    .then(rate => {
-        console.log("rated not loading: ", rate);
-    })
-    .catch(error => {
-        console.log("error:", error)
-    })
-
 //maintenance request table
 export async function addMaintenanceRequest(description, priority="Medium", status="Pending") {
     try {
         //const user_id = auth.currentUser.uid;
-        const user_id = "GlYiqNBr3sVqlfLmhuQI"
+        const user_id = "yVCt0oai3bWb93On8Cva"
         const userRef = doc(db, "users", user_id);
         const userDoc = await getDoc(userRef);
         const {house_id, house_unit} = userDoc.data();
@@ -233,64 +297,7 @@ addMaintenanceRequest("leaking in the kitchen", "high", "pending")
         console.log("error:", error)
     })
 
-// update rating in user table
-export async function updateUserRating(user_id, new_rating) {
-    try {
-        const userRef = doc(db, "users", user_id);
-        await updateDoc(userRef, {
-        rating: new_rating,
-        updated_at: new Date()
-        });
-        console.log('User rating updated');
-    } catch (error) {
-        console.error('Error updating user rating:', error);
-        throw error;
-    }
-}
-
-// testing updateUserRating function
-const testUserId = "PnW1e409Oysb5lzOp5QH";
-const newRating = 4.5;
-
-updateUserRating(testUserId, newRating)
-  .then(() => {
-    console.log(`User rating updated successfully: ${testUserId}`);
-  })
-  .catch(error => {
-    console.log("Error updating user rating:", error);
-  });
-
-// update calculations in the rating table
-export async function updateRatingCalculation(rating_id, rating_score, comment = null) {
-    try {
-      const ratingRef = doc(db, "rating", rating_id);
-      await updateDoc(ratingRef, {
-        rating_score: rating_score,
-        comment: comment,
-        updated_at: new Date()
-      });
-      console.log(`Rating updated: ${rating_id}`);
-    } catch (error) {
-      console.error('Error updating rating:', error);
-      throw error;
-    }
-  }
-
-// testing updateRatingCalculation function
-const testRatingId = "Nw1Zt2KnmLOXeAEMDNrn";
-const updatedRatingScore = 4;
-const ratingComment = "Great job, well done!";
-
-updateRatingCalculation(testRatingId, updatedRatingScore, ratingComment)
-  .then(() => {
-    console.log(`Rating updated successfully: ${testRatingId}`);
-  })
-  .catch(error => {
-    console.log("Error updating rating:", error);
-  });
-
-
-// update the maintainance table when the status changes
+//update the maintainance table when the status changes
 export async function updateMaintenanceStatus(request_id, new_status, updated_by) {
     try {
         const requestRef = doc(db, "maintenance_requests", request_id);
@@ -308,7 +315,7 @@ export async function updateMaintenanceStatus(request_id, new_status, updated_by
 
 
 // Testing updateMaintenanceStatus function
-const testRequestId = "gSC63q1E0sLQfAqPtRQD";
+const testRequestId = "cxnPqfkHr8VYz1AoJZyM";
 const newStatus = "Completed";
 const updatedBy = "landlord_123";
 
@@ -319,45 +326,46 @@ updateMaintenanceStatus(testRequestId, newStatus, updatedBy)
   .catch(error => {
     console.log("Error updating maintenance request status:", error);
   });
+
+
+// Add a new chore to Firestore
+export async function addChore(chore_name, due_date, recurring = true, frequency) {
+    try {
+        const user_id = "hUi9sYvSLeRuXEHQ6LDB"; // Mocked user ID for example
+        const userRef = doc(db, "users", user_id);
+        const userDoc = await getDoc(userRef);
+        const { house_id, house_unit } = userDoc.data();
   
-  // Add a new chore to Firestore
-  export async function addChore(chore_name, due_date, recurring = true, frequency) {
-      try {
-          const user_id = "7eOgsYOB2gWMEdkMqbuP"; // Mocked user ID for example
-          const userRef = doc(db, "users", user_id);
-          const userDoc = await getDoc(userRef);
-          const { house_id, house_unit } = userDoc.data();
+        const chore_id = uuidv4(); // Generate the same ID for document and field
+
+        // Set the document with chore_id as its ID
+        await setDoc(doc(db, "chores", chore_id), {
+            chore_id: chore_id,  // Same as document ID
+            house_id: house_id,
+            house_unit: house_unit,
+            chore_name: chore_name,
+            due_date: due_date,
+            recurring: recurring,
+            frequency: frequency,
+            created_by: user_id,
+            created_at: new Date()
+        });
   
-          const chore_id = uuidv4(); // Generate the same ID for document and field
+        console.log('Chore created with ID:', chore_id);
+        return chore_id; // Return the chore_id (same as document ID)
+    } catch (error) {
+        console.error('Error adding chore:', error);
+    }
+}
+
+// Update an existing chore in Firestore
+export async function updateChore(chore_id, chore_name, due_date, status, recurring, frequency) {
+    try {
+        const choreRef = doc(db, "chores", chore_id); // Reference to the document
+        const choreDoc = await getDoc(choreRef); // Fetch the document
   
-          // Set the document with chore_id as its ID
-          await setDoc(doc(db, "chores", chore_id), {
-              chore_id: chore_id,  // Same as document ID
-              house_id: house_id,
-              house_unit: house_unit,
-              chore_name: chore_name,
-              due_date: due_date,
-              recurring: recurring,
-              frequency: frequency,
-              created_by: user_id,
-              created_at: new Date()
-          });
-  
-          console.log('Chore created with ID:', chore_id);
-          return chore_id; // Return the chore_id (same as document ID)
-      } catch (error) {
-          console.error('Error adding chore:', error);
-      }
-  }
-  
-  // Update an existing chore in Firestore
-  export async function updateChore(chore_id, chore_name, due_date, status, recurring, frequency) {
-      try {
-          const choreRef = doc(db, "chores", chore_id); // Reference to the document
-          const choreDoc = await getDoc(choreRef); // Fetch the document
-  
-          if (!choreDoc.exists()) {
-              throw new Error(`No chore found with ID: ${chore_id}`);
+        if (!choreDoc.exists()) {
+            throw new Error(`No chore found with ID: ${chore_id}`);
           }
   
           // Update the document with new data
@@ -408,4 +416,3 @@ updateMaintenanceStatus(testRequestId, newStatus, updatedBy)
   
   // Execute the workflow
   manageChoreLifecycle();
-  
