@@ -16,6 +16,8 @@ const firebaseConfig = {
   appId: process.env.EXPO_APP_FIREBASE_APP_ID
 };
 
+console.log('Firebase Config:', firebaseConfig);
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
