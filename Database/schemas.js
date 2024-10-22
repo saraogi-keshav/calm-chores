@@ -218,7 +218,6 @@ assignChore("pending","user 1")
 //notification table
 export async function notification(message) {
     try {
-        // const user_id = auth.currentUser.uid;
         const user_id = "CNUo2LgQGG00HFuEsOWh"
         const userRef = doc(db, "users", user_id);
         const userDoc = await getDoc(userRef);
@@ -247,28 +246,38 @@ notification("pay your bill before the due date.")
         console.log("Error:", error);
     });
 
-//maintenance request table
-export async function addMaintenanceRequest(description, priority="Medium", status="Pending") {
+// Add a new maintenance request to Firestore
+export async function addMaintenanceRequest(description, priority = "Medium", status = "Pending") {
     try {
-        //const user_id = auth.currentUser.uid;
-        const user_id = "yVCt0oai3bWb93On8Cva"
+        const user_id = "hUi9sYvSLeRuXEHQ6LDB";
         const userRef = doc(db, "users", user_id);
         const userDoc = await getDoc(userRef);
-        const {house_id, house_unit} = userDoc.data();
+        
+        if (!userDoc.exists()) {
+            throw new Error(`No user found with ID: ${user_id}`);
+        }
+        
+        const { house_id, house_unit } = userDoc.data();
 
         const landlordRef = query(collection(db, "users"),
-                            where("profile_type", "==", "landlord"),
-                            where("house_id", "==", house_id)
+            where("profile_type", "==", "Landlord"),
+            where("house_id", "==", house_id)
         );
-
-        const landlordDoc = await getDocs(landlordRef);
+        
+        const landlordDocs = await getDocs(landlordRef);
         let landlord_id = null;
-        landlordDoc.forEach(doc => {
+        landlordDocs.forEach(doc => {
             landlord_id = doc.id;
         });
 
-        const maintenance_request_docRef = await addDoc(collection(db, "maintenance_requests"), {
-            request_id: uuidv4(),
+        if (!landlord_id) {
+            throw new Error(`No landlord found for house ID: ${house_id}`);
+        }
+
+        const request_id = uuidv4();
+
+        await setDoc(doc(db, "maintenance_requests", request_id), {
+            request_id: request_id,
             house_id: house_id,
             house_unit: house_unit,
             tenant_id: user_id,
@@ -277,56 +286,106 @@ export async function addMaintenanceRequest(description, priority="Medium", stat
             priority: priority,
             status: status,
             created_at: new Date(),
-            // update date when status changes
-            updated_at: new Date(),
+            updated_at: new Date()
         });
 
-        console.log('Maintenance request added with ID: ', maintenance_request_docRef.id);
-        return maintenance_request_docRef.id;
+        console.log('Maintenance request created with ID:', request_id);
+        return request_id;
     } catch (error) {
-        console.error('Error adding maintenance request: ', error);
+        console.error('Error adding maintenance request:', error);
     }
 }
 
-//testing
-addMaintenanceRequest("leaking in the kitchen", "high", "pending")
-    .then(request => {
-        console.log("maintenance: ", request);
-    })
-    .catch(error => {
-        console.log("error:", error)
-    })
-
-//update the maintainance table when the status changes
+// Update an existing maintenance request in Firestore
 export async function updateMaintenanceStatus(request_id, new_status, updated_by) {
     try {
-        const requestRef = doc(db, "maintenance_requests", request_id);
+        const requestRef = doc(db, "maintenance_requests", request_id); // Reference to the document
+        const requestDoc = await getDoc(requestRef); // Fetch the document
+
+        if (!requestDoc.exists()) {
+            throw new Error(`No maintenance request found with ID: ${request_id}`);
+        }
+
         await updateDoc(requestRef, {
-        status: new_status,
-        updated_by: updated_by,
-        updated_at: new Date()
+            status: new_status,
+            updated_by: updated_by,
+            updated_at: new Date()
         });
-        console.log('Maintenance request status updated');
+
+        console.log('Maintenance request updated successfully:', request_id);
     } catch (error) {
-        console.error('Error updating maintenance request status:', error);
-        throw error;
+        console.error('Error updating maintenance request:', error);
+    }
+}
+// Fetch all maintenance requests for a specific house
+export async function getMaintenanceRequestsByHouse(house_id, status = null) {
+    try {
+        const maintenanceRef = collection(db, "maintenance_requests");
+        let q;
+
+        if (status) {
+            q = query(maintenanceRef, where("house_id", "==", house_id), where("status", "==", status));
+        } else {
+            q = query(maintenanceRef, where("house_id", "==", house_id));
+        }
+
+        const querySnapshot = await getDocs(q);
+        const requests = [];
+        querySnapshot.forEach(doc => {
+            requests.push(doc.data());
+        });
+
+        console.log(`Fetched ${requests.length} maintenance requests for house ID: ${house_id}`);
+        return requests;
+    } catch (error) {
+        console.error('Error fetching maintenance requests:', error);
     }
 }
 
+// Delete an existing maintenance request
+export async function deleteMaintenanceRequest(request_id) {
+    try {
+        const requestRef = doc(db, "maintenance_requests", request_id);
+        await deleteDoc(requestRef);
+        console.log('Maintenance request deleted successfully:', request_id);
+    } catch (error) {
+        console.error('Error deleting maintenance request:', error);
+    }
+}
 
-// Testing updateMaintenanceStatus function
-const testRequestId = "cxnPqfkHr8VYz1AoJZyM";
-const newStatus = "Completed";
-const updatedBy = "landlord_123";
+let requestId;
+const tenantId = "user123";
+const description = "Leaking faucet in the kitchen";
+const priority = "High";
+const houseId = "house123";
 
-updateMaintenanceStatus(testRequestId, newStatus, updatedBy)
-  .then(() => {
-    console.log(`Maintenance request status updated successfully: ${testRequestId}`);
+addMaintenanceRequest(description, priority)
+  .then((generatedRequestId) => {
+    requestId = generatedRequestId;
+    console.log(`Maintenance request added with unique ID: ${requestId}`);
+
+    const newStatus = "Completed";
+    const updatedBy = "landlord123"; // Example landlord ID
+    return updateMaintenanceStatus(requestId, newStatus, updatedBy);
   })
-  .catch(error => {
-    console.log("Error updating maintenance request status:", error);
+  .then(() => {
+    console.log(`Maintenance request status updated successfully for request ID: ${requestId}`);
+    return getMaintenanceRequestsByHouse(houseId);
+  })
+  .then((requests) => {
+    console.log("Fetched maintenance requests for the house:", requests);
+    return deleteMaintenanceRequest(requestId);
+  })
+  .then(() => {
+    console.log(`Maintenance request with ID ${requestId} deleted successfully.`);
+    return getMaintenanceRequestsByHouse(houseId);
+  })
+  .then((remainingRequests) => {
+    console.log("Remaining maintenance requests after deletion:", remainingRequests);
+  })
+  .catch((error) => {
+    console.error("Error during the maintenance request test flow:", error);
   });
-
 
 // Add a new chore to Firestore
 export async function addChore(chore_name, due_date, recurring = true, frequency) {
@@ -336,11 +395,10 @@ export async function addChore(chore_name, due_date, recurring = true, frequency
         const userDoc = await getDoc(userRef);
         const { house_id, house_unit } = userDoc.data();
   
-        const chore_id = uuidv4(); // Generate the same ID for document and field
+        const chore_id = uuidv4();
 
-        // Set the document with chore_id as its ID
         await setDoc(doc(db, "chores", chore_id), {
-            chore_id: chore_id,  // Same as document ID
+            chore_id: chore_id,
             house_id: house_id,
             house_unit: house_unit,
             chore_name: chore_name,
@@ -352,7 +410,7 @@ export async function addChore(chore_name, due_date, recurring = true, frequency
         });
   
         console.log('Chore created with ID:', chore_id);
-        return chore_id; // Return the chore_id (same as document ID)
+        return chore_id;
     } catch (error) {
         console.error('Error adding chore:', error);
     }

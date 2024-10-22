@@ -1,6 +1,15 @@
 import express from 'express';
-import { addUser, addHouse, addChore, rating} from './Database/schemas.js';
 import bodyParser from 'body-parser';
+import { 
+  addUser, 
+  addHouse, 
+  addChore, 
+  rating, 
+  addMaintenanceRequest, 
+  updateMaintenanceStatus, 
+  getMaintenanceRequestsByHouse,
+  deleteMaintenanceRequest
+} from './Database/schemas.js';
 
 const app = express();
 const port = 3000;
@@ -77,5 +86,55 @@ app.delete('/deleteChore/:chore_id', async (req, res) => {
     res.status(200).json({ message: "Chore deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Route to add a maintenance request
+app.post('/addMaintenanceRequest', async (req, res) => {
+  const { description, priority, tenant_id, house_id } = req.body;
+
+  try {
+      const requestId = await addMaintenanceRequest(description, priority);
+      res.status(200).json({ requestId });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
+// Route to update maintenance request status
+app.put('/updateMaintenanceRequest/:request_id', async (req, res) => {
+  const { request_id } = req.params;
+  const { new_status, updated_by } = req.body;
+
+  try {
+      await updateMaintenanceStatus(request_id, new_status, updated_by);
+      res.status(200).json({ message: 'Maintenance request updated successfully' });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
+// Route to fetch all maintenance requests for a specific house
+app.get('/maintenanceRequests/:house_id', async (req, res) => {
+  const { house_id } = req.params;
+  const { status } = req.query;
+
+  try {
+      const requests = await getMaintenanceRequestsByHouse(house_id, status);
+      res.status(200).json(requests);
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
+// Route to delete a maintenance request
+app.delete('/deleteMaintenanceRequest/:request_id', async (req, res) => {
+  const { request_id } = req.params;
+
+  try {
+      await deleteMaintenanceRequest(request_id);
+      res.status(200).json({ message: 'Maintenance request deleted successfully' });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
   }
 });
