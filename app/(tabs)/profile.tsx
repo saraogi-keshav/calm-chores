@@ -27,7 +27,7 @@ export default function ProfileScreen() {
         </Text>
       )}
       <TouchableOpacity
-        className="bg-red-500 px-4 py-2 rounded-md"
+        className="bg-green-500 px-4 py-2 rounded-md"
         onPress={handleLogout}
       >
         <Text className="text-white font-bold">Log Out</Text>

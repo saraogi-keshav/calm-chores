@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text } from 'react-native';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { useRouter } from 'expo-router';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function SignUpScreen() {
   const [email, setEmail] = useState('');
@@ -12,10 +13,19 @@ export default function SignUpScreen() {
 
   const handleSignUp = async () => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        createdAt: new Date().toISOString(),
+        
+      });
+
       router.replace('/(tabs)/home');
     } catch (error) {
-      setError('Failed to sign up');
+      setError('Failed to sign up'+error);
     }
   };
 

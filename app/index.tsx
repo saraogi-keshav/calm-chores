@@ -25,5 +25,5 @@ export default function IndexScreen() {
     );
   }
 
-  return null; // This component will not render anything as it will always redirect
+  return null; 
 }
