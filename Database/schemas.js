@@ -1,6 +1,7 @@
-import { collection, addDoc, doc, setDoc, getDocs, getDoc, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDocs, getDoc, query, where, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { v4 as uuidv4 } from 'uuid';
+
 
 //user table
 export async function addUser(name, email, passwordHash, profileType, house_id=null, house_unit=null, chore_id=null) {
@@ -8,55 +9,76 @@ export async function addUser(name, email, passwordHash, profileType, house_id=n
     if (!['Roommate', 'Landlord'].includes(profileType)) {
         throw new Error("Invalid profile type. Must be 'Roommate' or 'Landlord'.");
     }
-    try {
-        // Add user document to the 'users' collection
-        const user_docRef = await addDoc(collection(db, "users"), {
-        name: name,
-        email: email,
-        password_hash: passwordHash,
-        profile_type: profileType,
-        house_id: house_id,
-        house_unit: house_unit,
-        chore_id: chore_id,
-        rating: 0,
-        created_at: new Date()
-    });
-
-    console.log('User added with ID: ', user_docRef.id);
-    return user_docRef.id; // return the document ID
-  } catch (error) {
-    console.error('Error adding user: ', error);
-  }
+    if (profileType == "Roommate") {
+        try {
+            // Add user document to the 'users' collection
+            const user_docRef = await addDoc(collection(db, "users"), {
+            name: name,
+            email: email,
+            password_hash: passwordHash,
+            profile_type: profileType,
+            house_id: house_id,
+            house_unit: house_unit,
+            chore_id: chore_id,
+            rating: 0,
+            created_at: new Date()
+        });
+    
+        console.log('User added with ID: ', user_docRef.id);
+        return user_docRef.id;
+      } catch (error) {
+        console.error('Error adding user: ', error);
+      }
+    }
+    
+    if (profileType == "Landlord") {
+        try {
+            // Add user document to the 'users' collection
+            const user_docRef = await addDoc(collection(db, "landlord"), {
+            name: name,
+            email: email,
+            password_hash: passwordHash,
+            profile_type: profileType,
+            house_id: [],
+            created_at: new Date()
+        });
+    
+        console.log('Landlord added with ID: ', user_docRef.id);
+        return user_docRef.id;
+      } catch (error) {
+        console.error('Error adding landlord: ', error);
+      }
+    }
 }
 
 //testing user table
-const userName = "Testing";
-const userEmail = "testing@test.com";
-const userPasswordHash = "password";
-const userProfileType = "Landlord";
+// const userName = "Testing";
+// const userEmail = "testing@test.com";
+// const userPasswordHash = "password";
+// const userProfileType = "Landlord";
 
-// Call the function to add a user
-addUser(userName, userEmail, userPasswordHash, userProfileType)
-  .then(userId => {
-    console.log(`User added with unique ID: ${userId}`);
-  })
-  .catch(error => {
-    console.error("Failed to add user:", error);
-  });
+// // Call the function to add a user
+// addUser(userName, userEmail, userPasswordHash, userProfileType)
+//   .then(userId => {
+//     console.log(`User added with unique ID: ${userId}`);
+//   })
+//   .catch(error => {
+//     console.error("Failed to add user:", error);
+//   });
 
-const user = "test2";
-const email = "testing@test.com";
-const pw = "password";
-const type = "Roommate";
+// const user = "test2";
+// const email = "testing@test.com";
+// const pw = "password";
+// const type = "Roommate";
   
-  // Call the function to add a user
-addUser(user, email, pw, type)
-    .then(userId => {
-      console.log(`User added with unique ID: ${userId}`);
-    })
-    .catch(error => {
-      console.error("Failed to add user:", error);
-    });
+//   // Call the function to add a user
+// addUser(user, email, pw, type)
+//     .then(userId => {
+//       console.log(`User added with unique ID: ${userId}`);
+//     })
+//     .catch(error => {
+//       console.error("Failed to add user:", error);
+//     });
 
 
 //rating table
@@ -140,22 +162,25 @@ updateUserRating(testUserId)
   });
 
 
+
 //house table
 export async function addHouse(house_name, house_unit, address) {
     try {
         //get the current user id
         // const userID = auth.currentUser.uid;
-        const userID = "PVdRO5GXmVysIH1i7n3y"
+        const userID = "EkA0Mbq8Wf7aYGVG26CZ"
 
         //add house info
         const house_docRef = await addDoc(collection(db, "houses"), {
             house_id: uuidv4(),
             house_name: house_name,
             house_unit: house_unit,
+            tenants: [],
             address: address,
             created_by: userID,
             created_at: new Date()
         });
+        owned_by(userID);
         console.log('House added with ID: ', house_docRef.id);
         return house_docRef.id;
     }catch (error){
@@ -164,18 +189,75 @@ export async function addHouse(house_name, house_unit, address) {
 }
 
 //testing add house
-const house_name = "house 1";
-const houseUnit = "1";
-const address = "111 commonwealth ave";
+// const house_name = "house 1";
+// const houseUnit = "1";
+// const address = "111 commonwealth ave";
 
-addHouse(house_name, houseUnit, address)
-    .then(houseID => {
-        console.log("House added with ID:", houseID);
-    })
-    .catch(error => {
-        console.error("Failed to add house ID:", error);
-    });
+// addHouse(house_name, houseUnit, address)
+//     .then(houseID => {
+//         console.log("House added with ID:", houseID);
+//     })
+//     .catch(error => {
+//         console.error("Failed to add house ID:", error);
+//     });
 
+//house owned by which landlord, puts the house id to that landlord
+export async function owned_by(userID) {
+    try {
+        const houseRef = collection(db, "houses");
+        const gethouse_owner = query(houseRef, where("created_by", "==", userID));
+        const houseDocs = await getDocs(gethouse_owner);
+
+        const houseIDs = houseDocs.docs.map(doc => doc.data().house_id);
+
+        const ownerRef = doc(db, "landlord", userID);
+        await updateDoc(ownerRef, {
+            house_id: arrayUnion(...houseIDs)
+        });
+        console.log(`House IDs added to landlord ${userID}:`, houseIDs);
+    } catch (error) {
+        console.error("Error updating landlord with house IDs:", error);
+    }
+}
+
+//adding tenant into the house
+export async function addTenant_toHouse(landlordID, houseID, tenantID) {
+    const landlordRef = doc(db, "landlord", landlordID);
+    const landlordDoc = await getDoc(landlordRef);
+
+    if (landlordDoc.exists()) {
+        const housesRef = collection(db, "houses");
+        const house = query(housesRef, where("house_id", "==", houseID));
+        const querySnapshot = await getDocs(house);
+
+        const houseDoc = querySnapshot.docs[0].ref;
+        
+        await updateDoc(houseDoc, {
+            tenants: arrayUnion(tenantID)
+        });
+        update_user_house(tenantID, houseID);
+        console.log(`Tenant ${tenantID} added to house ${houseID} by landlord ${landlordID}.`);
+    } else {
+        throw new Error("Only landlords can edit the tenants in the house.");
+    }
+}
+
+//testing add roommate
+//addTenant_toHouse("EkA0Mbq8Wf7aYGVG26CZ", "42708c68-8f4b-4e33-9015-533af2b992d6", "85bKwsVMzsM9nRFdd8SY");
+
+// updating the user house
+export async function update_user_house(userID, houseID) {
+    try {
+        const userRef = doc(db, "users", userID);
+        await updateDoc(userRef, {
+        house_id: houseID
+        });
+        console.log('User house updated');
+    } catch (error) {
+        console.error('Error updating user house:', error);
+        throw error;
+    }
+}
 
 //assign a chore
 export async function assignChore(status = "Pending", verified_by=null) {
@@ -206,13 +288,13 @@ export async function assignChore(status = "Pending", verified_by=null) {
 }
 
 //testing
-assignChore("pending","user 1")
-    .then(chore => {
-        console.log("Assigned chore:", chore);
-    })
-    .catch(error => {
-        console.log("Error adding:", error);
-    });
+// assignChore("pending","user 1")
+//     .then(chore => {
+//         console.log("Assigned chore:", chore);
+//     })
+//     .catch(error => {
+//         console.log("Error adding:", error);
+//     });
 
 
 //notification table
@@ -238,18 +320,18 @@ export async function notification(message) {
 }
 
 //testing
-notification("pay your bill before the due date.")
-    .then(notify => {
-        console.log("sent:", notify);
-    })
-    .catch(error => {
-        console.log("Error:", error);
-    });
+// notification("pay your bill before the due date.")
+//     .then(notify => {
+//         console.log("sent:", notify);
+//     })
+//     .catch(error => {
+//         console.log("Error:", error);
+//     });
 
 // Add a new maintenance request to Firestore
 export async function addMaintenanceRequest(description, priority = "Medium", status = "Pending") {
     try {
-        const user_id = "hUi9sYvSLeRuXEHQ6LDB";
+        const user_id = "85bKwsVMzsM9nRFdd8SY";
         const userRef = doc(db, "users", user_id);
         const userDoc = await getDoc(userRef);
         
@@ -259,10 +341,7 @@ export async function addMaintenanceRequest(description, priority = "Medium", st
         
         const { house_id, house_unit } = userDoc.data();
 
-        const landlordRef = query(collection(db, "users"),
-            where("profile_type", "==", "Landlord"),
-            where("house_id", "==", house_id)
-        );
+        const landlordRef = query(collection(db, "landlord"), where("house_id", "array-contains", house_id));
         
         const landlordDocs = await getDocs(landlordRef);
         let landlord_id = null;
@@ -354,10 +433,10 @@ export async function deleteMaintenanceRequest(request_id) {
 }
 
 let requestId;
-const tenantId = "user123";
+const tenantId = "85bKwsVMzsM9nRFdd8SY";
 const description = "Leaking faucet in the kitchen";
 const priority = "High";
-const houseId = "house123";
+const houseId = "41d150e4-d2a9-41e5-b03b-f6dd7565bf76";
 
 addMaintenanceRequest(description, priority)
   .then((generatedRequestId) => {
@@ -365,7 +444,7 @@ addMaintenanceRequest(description, priority)
     console.log(`Maintenance request added with unique ID: ${requestId}`);
 
     const newStatus = "Completed";
-    const updatedBy = "landlord123"; // Example landlord ID
+    const updatedBy = "EkA0Mbq8Wf7aYGVG26CZ"; // Example landlord ID
     return updateMaintenanceStatus(requestId, newStatus, updatedBy);
   })
   .then(() => {
