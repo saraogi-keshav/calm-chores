@@ -138,3 +138,44 @@ app.delete('/deleteMaintenanceRequest/:request_id', async (req, res) => {
       res.status(500).json({ error: error.message });
   }
 });
+
+app.post('/activateVacationMode', async (req, res) => {
+  const { user_id, start_date, end_date } = req.body;
+
+  try {
+      const success = await activateVacationMode(user_id, start_date, end_date);
+      if (success) {
+          res.status(200).json({ message: 'Vacation Mode activated successfully' });
+      } else {
+          res.status(500).json({ message: 'Failed to activate Vacation Mode' });
+      }
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/deactivateVacationMode', async (req, res) => {
+  const { user_id } = req.body;
+
+  try {
+      const success = await deactivateVacationMode(user_id);
+      if (success) {
+          res.status(200).json({ message: 'Vacation Mode deactivated successfully' });
+      } else {
+          res.status(500).json({ message: 'Failed to deactivate Vacation Mode' });
+      }
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/vacationModeStatus/:user_id', async (req, res) => {
+  const { user_id } = req.params;
+
+  try {
+      const inVacationMode = await isUserInVacationMode(user_id);
+      res.status(200).json({ vacation_mode: inVacationMode });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});

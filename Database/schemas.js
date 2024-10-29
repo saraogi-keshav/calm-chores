@@ -260,30 +260,31 @@ export async function update_user_house(userID, houseID) {
 }
 
 //assign a chore
-export async function assignChore(status = "Pending", verified_by=null) {
+export async function assignChore(chore_id, assigned_user_id) {
     try {
-        // const user_id = auth.currentUser.uid;
-        const user_id = "PVdRO5GXmVysIH1i7n3y"
+        // Check if the assigned user is in Vacation Mode
+        const inVacationMode = await isUserInVacationMode(assigned_user_id);
+        if (inVacationMode) {
+            // Logic to reassign the chore to another user
+            const alternativeUserId = "alternativeUser123";
+            assigned_user_id = alternativeUserId;
+        }
 
-        const userRef = doc(db, "users", user_id);
-        const userDoc = await getDoc(userRef);
-        const { chore_id } = userDoc.data();
-
-        const assignChore_docRef = await addDoc(collection(db, "chore_assignments"), {
-            assignment_id: uuidv4(),
+        // Proceed with assigning the chore to the designated or reassigned user
+        const assignment_id = uuidv4();
+        await setDoc(doc(db, "chore_assignments", assignment_id), {
+            assignment_id: assignment_id,
             chore_id: chore_id,
-            user_id: user_id,
-            status: status, //('Pending', 'Completed', 'Overdue')
-            // might need modify
-            verified_by: verified_by,
-            created_at: new Date(),
-            //need modify
-            updated_at: new Date()
+            user_id: assigned_user_id,
+            status: "Pending",
+            created_at: new Date()
         });
-        console.log('Chore assignment added with ID: ', assignChore_docRef.id);
-        return assignChore_docRef.id;
+
+        console.log(`Chore assigned with ID: ${assignment_id} to user: ${assigned_user_id}`);
+        return assignment_id;
     } catch (error) {
-        console.error('Error assigning chore: ', error);
+        console.error('Error assigning chore:', error);
+        throw error;
     }
 }
 
@@ -553,3 +554,78 @@ export async function updateChore(chore_id, chore_name, due_date, status, recurr
   
   // Execute the workflow
   manageChoreLifecycle();
+
+
+// Activate Vacation Mode
+export async function activateVacationMode(user_id, start_date, end_date) {
+    try {
+        const userRef = doc(db, "users", user_id);
+        const userDoc = await getDoc(userRef);
+
+        if (!userDoc.exists()) {
+            throw new Error(`No user found with ID: ${user_id}`);
+        }
+
+        await updateDoc(userRef, {
+            vacation_mode: true,
+            vacation_start: start_date,
+            vacation_end: end_date,
+            updated_at: new Date()
+        });
+
+        console.log(`Vacation Mode activated for user ID: ${user_id}`);
+        return true;
+    } catch (error) {
+        console.error('Error activating Vacation Mode:', error);
+        throw error;
+    }
+}
+
+// Deactivate Vacation Mode
+export async function deactivateVacationMode(user_id) {
+    try {
+        const userRef = doc(db, "users", user_id);
+        const userDoc = await getDoc(userRef);
+
+        if (!userDoc.exists()) {
+            throw new Error(`No user found with ID: ${user_id}`);
+        }
+
+        await updateDoc(userRef, {
+            vacation_mode: false,
+            vacation_start: null,
+            vacation_end: null,
+            updated_at: new Date()
+        });
+
+        console.log(`Vacation Mode deactivated for user ID: ${user_id}`);
+        return true;
+    } catch (error) {
+        console.error('Error deactivating Vacation Mode:', error);
+        throw error;
+    }
+}
+
+// Check if a user is in Vacation Mode
+export async function isUserInVacationMode(user_id) {
+    try {
+        const userRef = doc(db, "users", user_id);
+        const userDoc = await getDoc(userRef);
+
+        if (!userDoc.exists()) {
+            throw new Error(`No user found with ID: ${user_id}`);
+        }
+
+        const { vacation_mode, vacation_end } = userDoc.data();
+
+        if (vacation_mode && new Date(vacation_end) < new Date()) {
+            await deactivateVacationMode(user_id);
+            return false;
+        }
+
+        return vacation_mode;
+    } catch (error) {
+        console.error('Error checking Vacation Mode status:', error);
+        throw error;
+    }
+}
