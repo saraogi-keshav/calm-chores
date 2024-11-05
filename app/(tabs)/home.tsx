@@ -1,18 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, TextInput, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { User } from 'firebase/auth';
+import { useFocusEffect } from '@react-navigation/native';
+
+// Add a type for user details
+interface UserDetails {
+  email: string;
+  displayName: string | null;
+}
+
+// Add this interface near the top with your other interfaces
+interface HouseUser {
+  id: string;
+  email: string;
+  displayName: string;  
+  photoURL: string | null;
+}
+
+// Add this interface at the top with other interfaces
+interface UserInfo {
+  id: string;
+  email: string;
+  displayName: string;
+  photoURL: string | null;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, house, setHouse } = useAuth();
+  const { user, house, setHouse, houseLoading } = useAuth();
   const [copied, setCopied] = useState(false);
   const [houseId, setHouseId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [houseUsers, setHouseUsers] = useState<UserDetails[]>([]);
+  const [isEditingAreas, setIsEditingAreas] = useState(false);
+  const [areas, setAreas] = useState<string[]>([]);
+  const [newArea, setNewArea] = useState('');
+
+  // Add useEffect to fetch user details when house is set
+  useEffect(() => {
+    const fetchHouseUsers = async () => {
+      if (!house?.users) return;
+      
+      try {
+        const userPromises = (Array.isArray(house.users) ? house.users : []).map(async (userInfo: any) => {
+          return {
+            email: userInfo.email || '',
+            displayName: userInfo.displayName || null,
+          };
+        });
+
+        const users = await Promise.all(userPromises);
+        setHouseUsers(users);
+      } catch (error) {
+        console.error('Error fetching house users:', error);
+      }
+    };
+
+    fetchHouseUsers();
+  }, [house]);
 
   const handleAddHouse = () => {
     router.push('/add-house');
@@ -39,24 +90,51 @@ export default function HomeScreen() {
 
       if (!houseDoc.exists()) {
         Alert.alert('Error', 'House not found. Please check the ID and try again.');
+        setIsLoading(false);
         return;
       }
 
       const houseData = houseDoc.data();
+      
+      // Check if user is already in the house
+      const userExists = houseData.users?.some((houseUser: HouseUser) => houseUser.id === user.uid);
+      if (userExists) {
+        Alert.alert('Error', 'You are already a member of this house');
+        setIsLoading(false);
+        return;
+      }
 
+      // First update user's document
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         house: houseId.trim(),
         houseName: houseData.name
       });
 
+      // Then update house document
+      await updateDoc(houseRef, {
+        users: arrayUnion({
+          id: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || null,
+        })
+      });
+
       setHouse({
         id: houseId.trim(),
-        name: houseData.name
+        name: houseData.name,
+        users: [...(houseData.users || []), {
+          id: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || null,
+        }],
+        areas: houseData.areas || []
       });
 
       Alert.alert('Success', `You've joined ${houseData.name}!`);
-      setHouseId(''); 
+      setHouseId('');
 
     } catch (error) {
       console.error('Error joining house:', error);
@@ -66,62 +144,262 @@ export default function HomeScreen() {
     }
   };
 
+  const refreshHouseDetails = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userData = userDoc.data();
+      
+      if (userData?.house) {
+        const houseRef = doc(db, 'houses', userData.house);
+        const houseDoc = await getDoc(houseRef);
+        const houseData = houseDoc.data();
+        
+        if (houseData && Array.isArray(houseData.users)) {
+          // Fetch all users' information
+          const usersPromises = houseData.users.map(async (houseUser: any) => {
+            if (!houseUser?.id) return null;
+            
+            const userDoc = await getDoc(doc(db, 'users', houseUser.id));
+            const userData = userDoc.data();
+            return {
+              id: houseUser.id,
+              email: userData?.email || '',
+              displayName: userData?.displayName || '',
+              photoURL: userData?.photoURL || null,
+            };
+          });
+
+          const usersInfo = (await Promise.all(usersPromises)).filter((user): user is UserInfo => user !== null);
+
+          setHouse({
+            id: userData.house,
+            name: houseData.name || '',
+            users: usersInfo,
+            areas: houseData.areas || []
+          });
+        } else {
+          // Handle case where house has no users array
+          setHouse({
+            id: userData.house,
+            name: houseData?.name || '',
+            users: [],
+            areas: []
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing house details:', error);
+    }
+  }, [user, setHouse]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshHouseDetails();
+    }, [refreshHouseDetails])
+  );
+
+  // Add this function to handle area updates
+  const handleUpdateAreas = async () => {
+    if (!house?.id) return;
+    
+    try {
+      const houseRef = doc(db, 'houses', house.id);
+      await updateDoc(houseRef, {
+        areas: areas
+      });
+      
+      setHouse({
+        ...house,
+        areas: areas
+      });
+      
+      setIsEditingAreas(false);
+    } catch (error) {
+      console.error('Error updating areas:', error);
+      Alert.alert('Error', 'Failed to update house areas');
+    }
+  };
+
+  // Add this to initialize areas when house loads
+  useEffect(() => {
+    if (house?.areas) {
+      setAreas(house.areas);
+    }
+  }, [house]);
+
+  if (houseLoading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-gray-100 dark:bg-gray-900">
+        <Text className="text-gray-600 dark:text-gray-400">Loading house details...</Text>
+      </View>
+    );
+  }
+
+  if (!house) {
+    return (
+      <View className="flex-1 justify-center bg-gray-100 dark:bg-gray-900 ">
+        <Text className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-6">Home Screen</Text>
+        <TouchableOpacity
+          className="w-full bg-blue-500 rounded-md p-2 mb-4"
+          onPress={handleAddHouse}
+        >
+          <Text className="text-white font-bold text-center">Add House</Text>
+        </TouchableOpacity>
+        
+        <View className="w-full space-y-2">
+          <TextInput
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md p-2 text-black dark:text-white"
+            placeholder="Enter House ID"
+            placeholderTextColor="#9CA3AF"
+            value={houseId}
+            onChangeText={setHouseId}
+          />
+          <TouchableOpacity 
+            className={`w-full bg-blue-500 rounded-md p-2 ${isLoading ? 'opacity-50' : ''}`}
+            onPress={handleJoinHouse}
+            disabled={isLoading}
+          >
+            <Text className="text-white font-bold text-center">
+              {isLoading ? 'Joining...' : 'Join House'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 justify-center items-center bg-gray-100 dark:bg-gray-900 mx-8">
       <Text className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-6">Home Screen</Text>
-      {house ? (
-        <>
-          <Text className="text-lg text-gray-700 dark:text-gray-300 mb-4">
-            Your House: {house.name}
-          </Text>
-          <Pressable 
-            onPress={copyToClipboard}
-            className="flex-row items-center bg-gray-200 dark:bg-gray-800 rounded-lg p-3 mb-4"
-          >
-            <Text className="text-gray-700 dark:text-gray-300 mr-2">
-              House ID: {house.id}
-            </Text>
-            <Ionicons 
-              name={copied ? "checkmark-circle" : "copy-outline"} 
-              size={20} 
-              color={copied ? "#22c55e" : "#6b7280"}
-            />
-          </Pressable>
-          {copied && (
-            <Text className="text-green-500 text-sm mb-4">
-              Copied to clipboard!
-            </Text>
-          )}
-        </>
-      ) : (
-        <>
-          <TouchableOpacity
-            className="w-full bg-blue-500 rounded-md p-2 mb-4"
-            onPress={handleAddHouse}
-          >
-            <Text className="text-white font-bold text-center">Add House</Text>
-          </TouchableOpacity>
-          
-          <View className="w-full space-y-2">
-            <TextInput
-              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md p-2 text-black dark:text-white"
-              placeholder="Enter House ID"
-              placeholderTextColor="#9CA3AF"
-              value={houseId}
-              onChangeText={setHouseId}
-            />
-            <TouchableOpacity 
-              className={`w-full bg-blue-500 rounded-md p-2 ${isLoading ? 'opacity-50' : ''}`}
-              onPress={handleJoinHouse}
-              disabled={isLoading}
-            >
-              <Text className="text-white font-bold text-center">
-                {isLoading ? 'Joining...' : 'Join House'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </>
+      <Text className="text-lg text-gray-700 dark:text-gray-300 mb-4">
+        Your House: {house.name}
+      </Text>
+      <Pressable 
+        onPress={copyToClipboard}
+        className="flex-row items-center bg-gray-200 dark:bg-gray-800 rounded-lg p-3 mb-4"
+      >
+        <Text className="text-gray-700 dark:text-gray-300 mr-2">
+          House ID: {house.id}
+        </Text>
+        <Ionicons 
+          name={copied ? "checkmark-circle" : "copy-outline"} 
+          size={20} 
+          color={copied ? "#22c55e" : "#6b7280"}
+        />
+      </Pressable>
+      {copied && (
+        <Text className="text-green-500 text-sm mb-4">
+          Copied to clipboard!
+        </Text>
       )}
+      
+      {/* Add the users list section */}
+      <View className="w-full bg-white dark:bg-gray-800 rounded-lg p-2 mt-4">
+        <Text className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">
+          House Members
+        </Text>
+        {houseUsers.map((user, index) => (
+          <View 
+            key={index} 
+            className="flex-row items-center py-2 border-t border-gray-200 dark:border-gray-700"
+          >
+            <Ionicons 
+              name="person-circle-outline" 
+              size={24} 
+              color="#6b7280" 
+              className="mr-2"
+            />
+            <Text className="text-gray-700 dark:text-gray-300 mx-2">
+              {user.displayName || user.email}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {/* House Areas Section */}
+      <View className="w-full bg-white dark:bg-gray-800 rounded-lg p-2 mt-4">
+        <View className="flex-row justify-between items-center mb-2">
+          <Text className="text-lg font-bold text-gray-700 dark:text-gray-300">
+            House Areas
+          </Text>
+          <TouchableOpacity 
+            onPress={() => {
+              if (isEditingAreas) {
+                handleUpdateAreas();
+              } else {
+                setIsEditingAreas(true);
+              }
+            }}
+          >
+            <Text className="text-blue-500">
+              {isEditingAreas ? 'Done' : 'Edit'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {isEditingAreas ? (
+          <View>
+            {areas.map((area, index) => (
+              <View 
+                key={index} 
+                className="flex-row items-center justify-between py-2 border-t border-gray-200 dark:border-gray-700"
+              >
+                <Text className="text-gray-700 dark:text-gray-300">{area}</Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    const newAreas = areas.filter((_, i) => i !== index);
+                    setAreas(newAreas);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            
+            {/* Add new area input */}
+            <View className="flex-row items-center mt-2">
+              <TextInput
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md p-2 mr-2 text-gray-700 dark:text-gray-300"
+                placeholder="Add new area"
+                placeholderTextColor="#9CA3AF"
+                value={newArea}
+                onChangeText={setNewArea}
+              />
+              <TouchableOpacity 
+                onPress={() => {
+                  if (newArea.trim()) {
+                    setAreas([...areas, newArea.trim()]);
+                    setNewArea('');
+                  }
+                }}
+              >
+                <Ionicons name="add-circle-outline" size={24} color="#3b82f6" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View>
+            {areas.map((area, index) => (
+              <View 
+                key={index} 
+                className="flex-row items-center py-2 border-t border-gray-200 dark:border-gray-700"
+              >
+                <Ionicons 
+                  name="home-outline" 
+                  size={24} 
+                  color="#6b7280" 
+                  className="mr-2"
+                />
+                <Text className="mx-2 text-gray-700 dark:text-gray-300">
+                  {area}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
     </View>
   );
 }

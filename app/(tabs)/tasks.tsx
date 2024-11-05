@@ -20,11 +20,10 @@ export default function TasksScreen() {
   const { user, house } = useAuth();
   const router = useRouter();
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     if (!user || !house) return;
 
     try {
-      
       const tasksRef = collection(db, 'houses', house.id, 'tasks');
       const q = query(tasksRef);
       const querySnapshot = await getDocs(q);
@@ -41,12 +40,14 @@ export default function TasksScreen() {
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
-  };
+  }, [user, house]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchTasks();
-    }, [user, house])
+      if (user && house) {
+        fetchTasks();
+      }
+    }, [user, house, fetchTasks])
   );
 
   const handleToggleComplete = async (taskId: string, currentStatus: boolean) => {
@@ -61,19 +62,6 @@ export default function TasksScreen() {
       await fetchTasks(); 
     } catch (error) {
       console.error('Error updating task:', error);
-    }
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    if (!user || !house) return;
-
-    try {
-      
-      const taskRef = doc(db, 'houses', house.id, 'tasks', taskId);
-      await deleteDoc(taskRef);
-      await fetchTasks();
-    } catch (error) {
-      console.error('Error deleting task:', error);
     }
   };
 
@@ -95,18 +83,24 @@ export default function TasksScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 80 }} 
           renderItem={({ item }) => (
-            <View className="bg-white dark:bg-gray-800 p-4 rounded-md mb-2 flex-row justify-between items-center">
+            <View className="bg-white dark:bg-gray-800 p-4 rounded-md mb-2">
               <TouchableOpacity
-                onPress={() => handleToggleComplete(item.id, item.completed)}
+                onPress={() => router.push(`/task-info/${item.id}`)}
                 className="flex-1 flex-row items-center"
               >
-                <View className={`w-6 h-6 rounded-full border-2 border-blue-500 mr-3 ${
-                  item.completed ? 'bg-blue-500' : 'bg-transparent'
-                }`}>
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleToggleComplete(item.id, item.completed);
+                  }}
+                  className={`w-6 h-6 rounded-full border-2 border-blue-500 mr-3 ${
+                    item.completed ? 'bg-blue-500' : 'bg-transparent'
+                  }`}
+                >
                   {item.completed && (
                     <Ionicons name="checkmark" size={20} color="white" />
                   )}
-                </View>
+                </TouchableOpacity>
                 <View className="flex-1">
                   <Text className={`text-black dark:text-white text-lg ${
                     item.completed ? 'line-through' : ''
@@ -114,18 +108,15 @@ export default function TasksScreen() {
                     {item.title}
                   </Text>
                   {item.description && (
-                    <Text className="text-gray-600 dark:text-gray-400">
+                    <Text 
+                      numberOfLines={2} 
+                      ellipsizeMode="tail" 
+                      className="text-gray-600 dark:text-gray-400"
+                    >
                       {item.description}
                     </Text>
                   )}
                 </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                onPress={() => handleDeleteTask(item.id)}
-                className="ml-4"
-              >
-                <Ionicons name="trash-outline" size={24} color="#EF4444" />
               </TouchableOpacity>
             </View>
           )}
