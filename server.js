@@ -12,6 +12,7 @@ import {
 } from './Database/schemas.js';
 
 const app = express();
+const host = '0.0.0.0';
 const port = 3001;
 
 
@@ -51,6 +52,11 @@ app.post('/addHouse', async (req, res) => {
   }
 });
 
+// Route to handle the root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'Welcome to the Calm Chores API!' });
+});
+
 // Route to add a chore
 app.post('/addChore', async (req, res) => {
   const { chore_name, due_date, recurring, frequency } = req.body;
@@ -62,8 +68,8 @@ app.post('/addChore', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+app.listen(port,host, () => {
+  console.log(`Server running on port hhtp://${host}:${port}`);
 });
 
 // Route to update an existing chore
