@@ -19,6 +19,7 @@ export default function TasksScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const { user, house } = useAuth();
   const router = useRouter();
+  const [selectedTab, setSelectedTab] = useState('all');
 
   const fetchTasks = useCallback(async () => {
     if (!user || !house) return;
@@ -77,6 +78,36 @@ export default function TasksScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100 dark:bg-gray-900">
+      <View className="px-4 pt-4 flex-row items-center justify-between">
+        <Text className="text-2xl pr-4 pl-1 font-bold text-gray-500 dark:text-white">
+          Chores
+        </Text>
+        <View className="flex-row bg-gray-200 dark:bg-gray-800 rounded-lg p-1 flex-1 max-w-[290px]">
+          {['Mine', 'All', 'Completed'].map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              onPress={() => setSelectedTab(tab.toLowerCase())}
+              className={`flex-1 p-2 rounded-md ${
+                selectedTab === tab.toLowerCase()
+                  ? 'bg-white dark:bg-gray-700'
+                  : ''
+              }`}
+            >
+              <Text
+                className={`text-center text-sm ${
+                  selectedTab === tab.toLowerCase()
+                    ? 'text-blue-500 font-semibold'
+                    : 'text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        
+      </View>
+
       <View className="flex-1 p-4">
         <FlatList
           data={tasks}

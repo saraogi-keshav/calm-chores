@@ -128,6 +128,12 @@ export default function TaskInfoScreen() {
       <View className="flex-1 p-4">
         <Text className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-6">Edit Task</Text>
  
+        <View className="flex-1 pb-4">
+          <ScrollView 
+            className="flex-1" 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
         <TextInput
           value={title}
           onChangeText={setTitle}
@@ -317,7 +323,31 @@ export default function TaskInfoScreen() {
           </View>
         )}
  
-        <View className="flex-1" />
+        {isRepeating && (
+          <View className="bg-white dark:bg-gray-800 rounded-md p-4 mb-4 mt-4">
+            <Text className="text-gray-700 dark:text-gray-300 text-lg font-semibold mb-3">
+              Task Completions
+            </Text>
+ 
+            <View className="flex-row justify-between mb-2 px-2">
+              <Text className="text-gray-600 dark:text-gray-400 font-medium w-2/3">User</Text>
+              <Text className="text-gray-600 dark:text-gray-400 font-medium flex-1 text-center">Completions</Text>
+            </View>
+ 
+            {users.map((user) => (
+              <View key={user.uid} className="flex-row justify-between items-center py-2 px-2 border-b border-gray-200 dark:border-gray-700">
+                <Text className="text-gray-700 dark:text-gray-300 w-2/3" numberOfLines={1}>
+                  {user.displayName || user.email}
+                </Text>
+                <Text className="text-gray-700 dark:text-gray-300 flex-1 text-center">
+                  0
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+        </ScrollView>
+        </View>
  
         <TouchableOpacity
           onPress={handleUpdateTask}
@@ -328,7 +358,7 @@ export default function TaskInfoScreen() {
             {loading ? 'Updating...' : 'Update Task'}
           </Text>
         </TouchableOpacity>
-
+ 
         <TouchableOpacity
           onPress={handleDeleteTask}
           disabled={loading}
@@ -342,4 +372,3 @@ export default function TaskInfoScreen() {
     </SafeAreaView>
   );
 }
- 
