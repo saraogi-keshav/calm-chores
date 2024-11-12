@@ -1,11 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, Switch, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
- 
+import { nanoid } from 'nanoid';
+
+const getUserAssignmentCounts = async (houseId: string, houseUsers: any[]) => {
+  try {
+    const tasksRef = collection(db, 'houses', houseId, 'tasks');
+    const tasksQuery = query(tasksRef, where('completed', '==', false));
+    const tasksSnapshot = await getDocs(tasksQuery);
+    const assignments: { [key: string]: number } = {};
+
+    houseUsers.forEach((user: any) => {
+      assignments[user.id] = 0;
+    });
+
+    tasksSnapshot.forEach((doc) => {
+      const task = doc.data();
+      if (task.assignedTo) {
+        assignments[task.assignedTo] = (assignments[task.assignedTo] || 0) + 1;
+      }
+    });
+
+    return assignments;
+  } catch (error) {
+    console.error('Error getting assignment counts:', error);
+    return {};
+  }
+};
+
+const getNextAssignee = async (houseId: string, houseUsers: any[], repeatTaskId: string | null = null) => {
+  try {
+    const assignments = await getUserAssignmentCounts(houseId, houseUsers);
+    const minAssignments = Math.min(...Object.values(assignments));
+    const eligibleUsers = Object.entries(assignments)
+      .filter(([_, count]) => count === minAssignments)
+      .map(([userId]) => userId);
+
+    const randomIndex = Math.floor(Math.random() * eligibleUsers.length);
+    return eligibleUsers[randomIndex];
+  } catch (error) {
+    console.error('Error getting next assignee:', error);
+    return null;
+  }
+};
+
 export default function TaskInfoScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -24,10 +66,13 @@ export default function TaskInfoScreen() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [isAreaDropdownOpen, setIsAreaDropdownOpen] = useState(false);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [taskData, setTaskData] = useState<any>(null);
  
   useEffect(() => {
     fetchTaskDetails();
     fetchHouseUsers();
+    fetchTasks();
   }, [id, house]);
  
   const fetchTaskDetails = async () => {
@@ -48,6 +93,7 @@ export default function TaskInfoScreen() {
         setAutoRotate(taskData.autoRotate || false);
         setSelectedUserId(taskData.assignedTo || null);
         setSelectedArea(taskData.area || null);
+        setTaskData(taskDoc.data());
       }
     } catch (error) {
       console.error('Error fetching task details:', error);
@@ -59,6 +105,11 @@ export default function TaskInfoScreen() {
     setLoading(true);
  
     try {
+      let assignedUserId = selectedUserId;
+      if (autoRotate) {
+        assignedUserId = await getNextAssignee(house.id, house.users, taskData?.repeatTaskId);
+      }
+
       const taskRef = doc(db, 'houses', house.id, 'tasks', id as string);
       await updateDoc(taskRef, {
         title,
@@ -67,7 +118,7 @@ export default function TaskInfoScreen() {
         isRepeating,
         alwaysRepeat,
         repeatDays: isRepeating && !alwaysRepeat ? Number(repeatDays) : null,
-        assignedTo: autoRotate ? null : selectedUserId,
+        assignedTo: assignedUserId,
         autoRotate,
         area: selectedArea,
       });
@@ -89,8 +140,8 @@ export default function TaskInfoScreen() {
     setDueDate(currentDate);
   };
  
-  const fetchHouseUsers = async () => {
-    if (!house) return;
+  const fetchHouseUsers = useCallback(async () => {
+    if (!house?.id) return;
     try {
       const houseDoc = await getDoc(doc(db, 'houses', house.id));
       if (houseDoc.exists()) {
@@ -106,7 +157,13 @@ export default function TaskInfoScreen() {
     } catch (error) {
       console.error('Error fetching house users:', error);
     }
-  };
+  }, [house?.id]);
+ 
+  useEffect(() => {
+    if (house?.id) {
+      fetchHouseUsers();
+    }
+  }, [house?.id]);
  
   const handleDeleteTask = async () => {
     if (!house || !id) return;
@@ -122,6 +179,12 @@ export default function TaskInfoScreen() {
       setLoading(false);
     }
   };
+ 
+  const fetchTasks = useCallback(async () => {
+    if (!house?.id) return;
+    const tasksSnapshot = await getDocs(collection(db, 'houses', house.id, 'tasks'));
+    setTasks(tasksSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+  }, [house?.id]);
  
   return (
     <SafeAreaView className="flex-1 bg-gray-100 dark:bg-gray-900">
@@ -323,27 +386,67 @@ export default function TaskInfoScreen() {
           </View>
         )}
  
-        {isRepeating && (
+        {isRepeating && taskData && (
           <View className="bg-white dark:bg-gray-800 rounded-md p-4 mb-4 mt-4">
             <Text className="text-gray-700 dark:text-gray-300 text-lg font-semibold mb-3">
-              Task Completions
+              Task Completion History
             </Text>
- 
+
             <View className="flex-row justify-between mb-2 px-2">
-              <Text className="text-gray-600 dark:text-gray-400 font-medium w-2/3">User</Text>
-              <Text className="text-gray-600 dark:text-gray-400 font-medium flex-1 text-center">Completions</Text>
+              <Text className="text-gray-600 dark:text-gray-400 font-medium w-1/3">User</Text>
+              <Text className="text-gray-600 dark:text-gray-400 font-medium text-center flex-1">Completed</Text>
+              {!taskData.alwaysRepeat && (
+                <Text className="text-gray-600 dark:text-gray-400 font-medium text-center flex-1">Overdue</Text>
+              )}
+              <Text className="text-gray-600 dark:text-gray-400 font-medium text-center flex-1">Missed</Text>
             </View>
- 
-            {users.map((user) => (
-              <View key={user.uid} className="flex-row justify-between items-center py-2 px-2 border-b border-gray-200 dark:border-gray-700">
-                <Text className="text-gray-700 dark:text-gray-300 w-2/3" numberOfLines={1}>
-                  {user.displayName || user.email}
-                </Text>
-                <Text className="text-gray-700 dark:text-gray-300 flex-1 text-center">
-                  0
-                </Text>
-              </View>
-            ))}
+
+            {users.map((user) => {
+              const onTimeCompletions = tasks?.filter(task => 
+                task.repeatTaskId === taskData.repeatTaskId && 
+                task.completedBy === user.uid &&
+                task.completed &&
+                (
+                  !task.overdueCompletion ||
+                  taskData.alwaysRepeat ||
+                  task.assignedTo !== user.uid
+                )
+              ).length || 0;
+
+              const overdueCompletions = !taskData.alwaysRepeat ? tasks?.filter(task =>
+                task.repeatTaskId === taskData.repeatTaskId &&
+                task.completedBy === user.uid &&
+                task.completed &&
+                task.overdueCompletion &&
+                task.assignedTo === user.uid
+              ).length || 0 : 0;
+
+              const missedTasks = tasks?.filter(task =>
+                task.repeatTaskId === taskData.repeatTaskId &&
+                task.assignedTo === user.uid &&
+                task.completed &&
+                task.completedBy !== user.uid
+              ).length || 0;
+
+              return (
+                <View key={user.uid} className="flex-row justify-between items-center py-2 px-2 border-b border-gray-200 dark:border-gray-700">
+                  <Text className="text-gray-700 dark:text-gray-300 w-1/3" numberOfLines={1}>
+                    {user.displayName || user.email}
+                  </Text>
+                  <Text className="text-green-600 dark:text-green-400 flex-1 text-center">
+                    {onTimeCompletions}
+                  </Text>
+                  {!taskData.alwaysRepeat && (
+                    <Text className="text-yellow-600 dark:text-yellow-400 flex-1 text-center">
+                      {overdueCompletions}
+                    </Text>
+                  )}
+                  <Text className="text-red-600 dark:text-red-400 flex-1 text-center">
+                    {missedTasks}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         )}
         </ScrollView>

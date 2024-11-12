@@ -7,15 +7,12 @@ import * as Clipboard from 'expo-clipboard';
 import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { User } from 'firebase/auth';
-import { useFocusEffect } from '@react-navigation/native';
 
-// Add a type for user details
 interface UserDetails {
   email: string;
   displayName: string | null;
 }
 
-// Add this interface near the top with your other interfaces
 interface HouseUser {
   id: string;
   email: string;
@@ -23,7 +20,6 @@ interface HouseUser {
   photoURL: string | null;
 }
 
-// Add this interface at the top with other interfaces
 interface UserInfo {
   id: string;
   email: string;
@@ -41,8 +37,8 @@ export default function HomeScreen() {
   const [isEditingAreas, setIsEditingAreas] = useState(false);
   const [areas, setAreas] = useState<string[]>([]);
   const [newArea, setNewArea] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Add useEffect to fetch user details when house is set
   useEffect(() => {
     const fetchHouseUsers = async () => {
       if (!house?.users) return;
@@ -96,7 +92,6 @@ export default function HomeScreen() {
 
       const houseData = houseDoc.data();
       
-      // Check if user is already in the house
       const userExists = houseData.users?.some((houseUser: HouseUser) => houseUser.id === user.uid);
       if (userExists) {
         Alert.alert('Error', 'You are already a member of this house');
@@ -104,14 +99,12 @@ export default function HomeScreen() {
         return;
       }
 
-      // First update user's document
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         house: houseId.trim(),
         houseName: houseData.name
       });
 
-      // Then update house document
       await updateDoc(houseRef, {
         users: arrayUnion({
           id: user.uid,
@@ -145,8 +138,9 @@ export default function HomeScreen() {
   };
 
   const refreshHouseDetails = useCallback(async () => {
-    if (!user) return;
-
+    if (!user || isRefreshing) return;
+    
+    setIsRefreshing(true);
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
@@ -157,7 +151,6 @@ export default function HomeScreen() {
         const houseData = houseDoc.data();
         
         if (houseData && Array.isArray(houseData.users)) {
-          // Fetch all users' information
           const usersPromises = houseData.users.map(async (houseUser: any) => {
             if (!houseUser?.id) return null;
             
@@ -180,7 +173,6 @@ export default function HomeScreen() {
             areas: houseData.areas || []
           });
         } else {
-          // Handle case where house has no users array
           setHouse({
             id: userData.house,
             name: houseData?.name || '',
@@ -191,16 +183,17 @@ export default function HomeScreen() {
       }
     } catch (error) {
       console.error('Error refreshing house details:', error);
+    } finally {
+      setIsRefreshing(false);
     }
-  }, [user, setHouse]);
+  }, [user, isRefreshing]);
 
-  useFocusEffect(
-    useCallback(() => {
+  useEffect(() => {
+    if (user) {
       refreshHouseDetails();
-    }, [refreshHouseDetails])
-  );
+    }
+  }, [user]);
 
-  // Add this function to handle area updates
   const handleUpdateAreas = async () => {
     if (!house?.id) return;
     
@@ -222,7 +215,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Add this to initialize areas when house loads
   useEffect(() => {
     if (house?.areas) {
       setAreas(house.areas);
@@ -295,7 +287,6 @@ export default function HomeScreen() {
         </Text>
       )}
       
-      {/* Add the users list section */}
       <View className="w-full bg-white dark:bg-gray-800 rounded-lg p-2 mt-4">
         <Text className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">
           House Members
@@ -318,7 +309,6 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      {/* House Areas Section */}
       <View className="w-full bg-white dark:bg-gray-800 rounded-lg p-2 mt-4">
         <View className="flex-row justify-between items-center mb-2">
           <Text className="text-lg font-bold text-gray-700 dark:text-gray-300">
@@ -358,7 +348,6 @@ export default function HomeScreen() {
               </View>
             ))}
             
-            {/* Add new area input */}
             <View className="flex-row items-center mt-2">
               <TextInput
                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md p-2 mr-2 text-gray-700 dark:text-gray-300"

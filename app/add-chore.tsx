@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Platform, SafeAreaView, Switch, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { collection, addDoc, getDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDoc, doc, updateDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
+import 'react-native-get-random-values';
+import { nanoid } from 'nanoid';
 
 export default function AddChoreScreen() {
   const [choreName, setChoreName] = useState('');
@@ -38,12 +40,24 @@ export default function AddChoreScreen() {
       return;
     }
 
+    if (isRepeating && !alwaysRepeat && (!repeatDays || repeatDays === '0')) {
+      alert('Please enter the number of days for repeating task');
+      return;
+    }
+
     try {
+      const repeatTaskId = isRepeating ? nanoid() : null;
+      let assignedUserId = selectedUserId;
+
+      if (autoRotate) {
+        assignedUserId = await getNextAssignee(house.id, house.users, repeatTaskId);
+      }
+
       await addDoc(collection(db, 'houses', house.id, 'tasks'), {
         title: choreName,
         description,
         dueDate: isRepeating && alwaysRepeat ? null : dueDate.toISOString(),
-        assignedTo: autoRotate ? null : selectedUserId,
+        assignedTo: assignedUserId,
         createdBy: user.uid,
         autoRotate,
         completed: false,
@@ -52,6 +66,7 @@ export default function AddChoreScreen() {
         alwaysRepeat,
         repeatDays: isRepeating && !alwaysRepeat ? Number(repeatDays) : null,
         area: selectedArea,
+        repeatTaskId,
       });
       router.push('/tasks');
     } catch (error) {
@@ -67,7 +82,7 @@ export default function AddChoreScreen() {
         const houseData = houseDoc.data();
         const usersList = houseData.users || [];
         const mappedUsers = usersList.map((user: any) => ({
-          uid: user.id, // Changed from user.uid to user.id
+          uid: user.id,
           displayName: user.displayName || user.email,
           email: user.email
         }));
@@ -277,7 +292,7 @@ export default function AddChoreScreen() {
                     testID="datePicker"
                     value={dueDate}
                     mode="date"
-                    display={Platform.OS === 'ios' ? 'compact' : 'default'}
+                    display={Platform.OS === 'ios' ? 'compact' : 'spinner'}
                     onChange={onChangeDate}
                     className="h-8 p-0 m-0 text-md"
                   />
@@ -285,35 +300,11 @@ export default function AddChoreScreen() {
                     testID="timePicker"
                     value={dueDate}
                     mode="time"
-                    display={Platform.OS === 'ios' ? 'compact' : 'default'}
+                    display={Platform.OS === 'ios' ? 'compact' : 'spinner'}
                     onChange={onChangeTime}
                     className="h-8 p-0 m-0 text-md"
                   />
                 </View>
-              </View>
-            )}
-
-            {isRepeating && (
-              <View className="bg-white dark:bg-gray-800 rounded-md p-4 mb-4 mt-4">
-                <Text className="text-gray-700 dark:text-gray-300 text-lg font-semibold mb-3">
-                  Task Completions
-                </Text>
-                
-                <View className="flex-row justify-between mb-2 px-2">
-                  <Text className="text-gray-600 dark:text-gray-400 font-medium w-2/3">User</Text>
-                  <Text className="text-gray-600 dark:text-gray-400 font-medium flex-1 text-center">Completions</Text>
-                </View>
-
-                {users.map((user) => (
-                  <View key={user.uid} className="flex-row justify-between items-center py-2 px-2 border-b border-gray-200 dark:border-gray-700">
-                    <Text className="text-gray-700 dark:text-gray-300 w-2/3" numberOfLines={1}>
-                      {user.displayName || user.email}
-                    </Text>
-                    <Text className="text-gray-700 dark:text-gray-300 flex-1 text-center">
-                      0
-                    </Text>
-                  </View>
-                ))}
               </View>
             )}
           </ScrollView>
@@ -329,3 +320,45 @@ export default function AddChoreScreen() {
     </SafeAreaView>
   );
 }
+
+const getUserAssignmentCounts = async (houseId: string, houseUsers: any[]) => {
+  try {
+    const tasksRef = collection(db, 'houses', houseId, 'tasks');
+    const tasksQuery = query(tasksRef, where('completed', '==', false));
+    const tasksSnapshot = await getDocs(tasksQuery);
+    const assignments: { [key: string]: number } = {};
+
+    houseUsers.forEach((user: any) => {
+      assignments[user.id] = 0;
+    });
+
+    tasksSnapshot.forEach((doc) => {
+      const task = doc.data();
+      if (task.assignedTo) {
+        assignments[task.assignedTo] = (assignments[task.assignedTo] || 0) + 1;
+      }
+    });
+
+    return assignments;
+  } catch (error) {
+    console.error('Error getting assignment counts:', error);
+    return {};
+  }
+};
+
+const getNextAssignee = async (houseId: string, houseUsers: any[], repeatTaskId: string | null = null) => {
+  try {
+    const assignments = await getUserAssignmentCounts(houseId, houseUsers);
+    
+    const minAssignments = Math.min(...Object.values(assignments));
+    const eligibleUsers = Object.entries(assignments)
+      .filter(([_, count]) => count === minAssignments)
+      .map(([userId]) => userId);
+
+    const randomIndex = Math.floor(Math.random() * eligibleUsers.length);
+    return eligibleUsers[randomIndex];
+  } catch (error) {
+    console.error('Error getting next assignee:', error);
+    return null;
+  }
+};

@@ -8,7 +8,6 @@ interface UserInfo {
   id: string;
   email: string;
   displayName: string | null;
-  // Add any other user fields you need
 }
 
 interface House {
