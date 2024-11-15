@@ -1,22 +1,11 @@
 import React, { useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { useRouter } from 'expo-router';
-
+import { useRouter, Redirect } from 'expo-router';
+ 
 export default function IndexScreen() {
   const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading) {
-      if (user) {
-        router.replace('/(tabs)/home');
-      } else {
-        router.replace('/login');
-      }
-    }
-  }, [user, loading, router]);
-
+ 
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -24,6 +13,10 @@ export default function IndexScreen() {
       </View>
     );
   }
-
-  return null; 
+ 
+  if (user) {
+    return <Redirect href="/(tabs)/home" />;
+  }
+ 
+  return <Redirect href="/login" />;
 }

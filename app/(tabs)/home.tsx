@@ -7,26 +7,26 @@ import * as Clipboard from 'expo-clipboard';
 import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { User } from 'firebase/auth';
-
+ 
 interface UserDetails {
   email: string;
   displayName: string | null;
 }
-
+ 
 interface HouseUser {
   id: string;
   email: string;
   displayName: string;  
   photoURL: string | null;
 }
-
+ 
 interface UserInfo {
   id: string;
   email: string;
   displayName: string;
   photoURL: string | null;
 }
-
+ 
 export default function HomeScreen() {
   const router = useRouter();
   const { user, house, setHouse, houseLoading } = useAuth();
@@ -38,11 +38,11 @@ export default function HomeScreen() {
   const [areas, setAreas] = useState<string[]>([]);
   const [newArea, setNewArea] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
-
+ 
   useEffect(() => {
     const fetchHouseUsers = async () => {
       if (!house?.users) return;
-      
+ 
       try {
         const userPromises = (Array.isArray(house.users) ? house.users : []).map(async (userInfo: any) => {
           return {
@@ -50,21 +50,21 @@ export default function HomeScreen() {
             displayName: userInfo.displayName || null,
           };
         });
-
+ 
         const users = await Promise.all(userPromises);
         setHouseUsers(users);
       } catch (error) {
         console.error('Error fetching house users:', error);
       }
     };
-
+ 
     fetchHouseUsers();
   }, [house]);
-
+ 
   const handleAddHouse = () => {
     router.push('/add-house');
   };
-
+ 
   const copyToClipboard = async () => {
     if (house?.id) {
       await Clipboard.setStringAsync(house.id);
@@ -72,39 +72,39 @@ export default function HomeScreen() {
       setTimeout(() => setCopied(false), 2000);
     }
   };
-
+ 
   const handleJoinHouse = async () => {
     if (!user || !houseId.trim()) {
       Alert.alert('Error', 'Please enter a house ID');
       return;
     }
-
+ 
     setIsLoading(true);
     try {
       const houseRef = doc(db, 'houses', houseId.trim());
       const houseDoc = await getDoc(houseRef);
-
+ 
       if (!houseDoc.exists()) {
         Alert.alert('Error', 'House not found. Please check the ID and try again.');
         setIsLoading(false);
         return;
       }
-
+ 
       const houseData = houseDoc.data();
-      
+ 
       const userExists = houseData.users?.some((houseUser: HouseUser) => houseUser.id === user.uid);
       if (userExists) {
         Alert.alert('Error', 'You are already a member of this house');
         setIsLoading(false);
         return;
       }
-
+ 
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         house: houseId.trim(),
         houseName: houseData.name
       });
-
+ 
       await updateDoc(houseRef, {
         users: arrayUnion({
           id: user.uid,
@@ -113,7 +113,7 @@ export default function HomeScreen() {
           photoURL: user.photoURL || null,
         })
       });
-
+ 
       setHouse({
         id: houseId.trim(),
         name: houseData.name,
@@ -125,10 +125,10 @@ export default function HomeScreen() {
         }],
         areas: houseData.areas || []
       });
-
+ 
       Alert.alert('Success', `You've joined ${houseData.name}!`);
       setHouseId('');
-
+ 
     } catch (error) {
       console.error('Error joining house:', error);
       Alert.alert('Error', 'Failed to join house. Please try again.');
@@ -136,36 +136,28 @@ export default function HomeScreen() {
       setIsLoading(false);
     }
   };
-
+ 
   const refreshHouseDetails = useCallback(async () => {
     if (!user || isRefreshing) return;
-    
+ 
     setIsRefreshing(true);
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
-      
+ 
       if (userData?.house) {
         const houseRef = doc(db, 'houses', userData.house);
         const houseDoc = await getDoc(houseRef);
         const houseData = houseDoc.data();
-        
+ 
         if (houseData && Array.isArray(houseData.users)) {
-          const usersPromises = houseData.users.map(async (houseUser: any) => {
-            if (!houseUser?.id) return null;
-            
-            const userDoc = await getDoc(doc(db, 'users', houseUser.id));
-            const userData = userDoc.data();
-            return {
-              id: houseUser.id,
-              email: userData?.email || '',
-              displayName: userData?.displayName || '',
-              photoURL: userData?.photoURL || null,
-            };
-          });
-
-          const usersInfo = (await Promise.all(usersPromises)).filter((user): user is UserInfo => user !== null);
-
+          const usersInfo = houseData.users.map((houseUser: any) => ({
+            id: houseUser.id,
+            email: houseUser.email || '',
+            displayName: houseUser.displayName || '',
+            photoURL: houseUser.photoURL || null,
+          }));
+ 
           setHouse({
             id: userData.house,
             name: houseData.name || '',
@@ -187,40 +179,40 @@ export default function HomeScreen() {
       setIsRefreshing(false);
     }
   }, [user, isRefreshing]);
-
+ 
   useEffect(() => {
     if (user) {
       refreshHouseDetails();
     }
   }, [user]);
-
+ 
   const handleUpdateAreas = async () => {
     if (!house?.id) return;
-    
+ 
     try {
       const houseRef = doc(db, 'houses', house.id);
       await updateDoc(houseRef, {
         areas: areas
       });
-      
+ 
       setHouse({
         ...house,
         areas: areas
       });
-      
+ 
       setIsEditingAreas(false);
     } catch (error) {
       console.error('Error updating areas:', error);
       Alert.alert('Error', 'Failed to update house areas');
     }
   };
-
+ 
   useEffect(() => {
     if (house?.areas) {
       setAreas(house.areas);
     }
   }, [house]);
-
+ 
   if (houseLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-100 dark:bg-gray-900">
@@ -228,7 +220,7 @@ export default function HomeScreen() {
       </View>
     );
   }
-
+ 
   if (!house) {
     return (
       <View className="flex-1 justify-center bg-gray-100 dark:bg-gray-900 ">
@@ -239,7 +231,7 @@ export default function HomeScreen() {
         >
           <Text className="text-white font-bold text-center">Add House</Text>
         </TouchableOpacity>
-        
+ 
         <View className="w-full space-y-2">
           <TextInput
             className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md p-2 text-black dark:text-white"
@@ -261,7 +253,7 @@ export default function HomeScreen() {
       </View>
     );
   }
-
+ 
   return (
     <View className="flex-1 justify-center items-center bg-gray-100 dark:bg-gray-900 mx-8">
       <Text className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-6">Home Screen</Text>
@@ -286,7 +278,7 @@ export default function HomeScreen() {
           Copied to clipboard!
         </Text>
       )}
-      
+ 
       <View className="w-full bg-white dark:bg-gray-800 rounded-lg p-2 mt-4">
         <Text className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">
           House Members
@@ -308,7 +300,7 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>
-
+ 
       <View className="w-full bg-white dark:bg-gray-800 rounded-lg p-2 mt-4">
         <View className="flex-row justify-between items-center mb-2">
           <Text className="text-lg font-bold text-gray-700 dark:text-gray-300">
@@ -328,7 +320,7 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-
+ 
         {isEditingAreas ? (
           <View>
             {areas.map((area, index) => (
@@ -347,7 +339,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             ))}
-            
+ 
             <View className="flex-row items-center mt-2">
               <TextInput
                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md p-2 mr-2 text-gray-700 dark:text-gray-300"
@@ -392,3 +384,4 @@ export default function HomeScreen() {
     </View>
   );
 }
+ 

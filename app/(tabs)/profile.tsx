@@ -1,14 +1,48 @@
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { signOut } from 'firebase/auth';
+import { signOut, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
-
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+ 
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  assignedTo: string | null;
+  createdBy: string;
+  createdAt: string;
+  dueDate: string;
+  isRepeating: boolean;
+  repeatDays?: number;
+  alwaysRepeat: boolean;
+  autoRotate: boolean;
+  area: string | null;
+  completedBy?: string | null;
+  completedAt?: string | null;
+  overdueCompletion?: boolean;
+  repeatTaskId?: string | null;
+}
+ 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-
+  const { user, updateUserDisplayName, house } = useAuth();
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(user?.uid || null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [userStats, setUserStats] = useState({
+    onTime: 0,
+    overdue: 0,
+    missed: 0,
+    total: 0,
+    completed: 0
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+ 
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -17,21 +51,216 @@ export default function ProfileScreen() {
       console.error('Error signing out: ', error);
     }
   };
-
+ 
+  const handleUpdateDisplayName = async () => {
+    try {
+      if (!user || !house) return;
+      setIsUpdating(true);
+ 
+      // Update Firebase Auth profile
+      await updateProfile(user, { displayName });
+ 
+      // Update user's display name in Firestore house document
+      const houseRef = doc(db, 'houses', house.id);
+      const updatedUsers = house.users.map(u => 
+        u.id === user.uid ? { ...u, displayName } : u
+      );
+ 
+      await updateDoc(houseRef, {
+        users: updatedUsers
+      });
+ 
+      await updateUserDisplayName(displayName);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating display name:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+ 
+  const fetchUserStats = useCallback(async () => {
+    if (!house || !selectedUserId) return;
+ 
+    try {
+      const tasksRef = collection(db, 'houses', house.id, 'tasks');
+      const tasksSnapshot = await getDocs(tasksRef);
+      const tasks = tasksSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
+ 
+      const stats = {
+        total: tasks.filter(task => 
+          task.completed && task.assignedTo === selectedUserId
+        ).length,
+ 
+        completed: tasks.filter(task => 
+          task.completed && (
+            task.completedBy === selectedUserId ||
+            (task.assignedTo === selectedUserId && task.completed)
+          )
+        ).length,
+ 
+        onTime: tasks.filter(task => 
+          task.completed && 
+          !task.overdueCompletion && (
+            (task.completedBy === selectedUserId && task.assignedTo !== selectedUserId) ||
+            (task.assignedTo === selectedUserId && task.completedBy === selectedUserId)
+          )
+        ).length,
+ 
+        overdue: tasks.filter(task => 
+          task.completed && 
+          task.assignedTo === selectedUserId && 
+          task.completedBy === selectedUserId && 
+          task.overdueCompletion
+        ).length,
+ 
+        missed: tasks.filter(task => 
+          task.completed && 
+          task.assignedTo === selectedUserId && 
+          task.completedBy !== selectedUserId
+        ).length
+      };
+ 
+      setUserStats(stats);
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+    }
+  }, [house?.id, selectedUserId]);
+ 
+  useEffect(() => {
+    fetchUserStats();
+  }, [fetchUserStats]);
+ 
   return (
-    <View className="flex-1 justify-center items-center bg-gray-100 dark:bg-gray-900">
-      <Text className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-4">Profile Screen</Text>
-      {user && (
-        <Text className="text-lg text-gray-700 dark:text-gray-300 mb-4">
-          Welcome, {user.email}
-        </Text>
-      )}
-      <TouchableOpacity
-        className="bg-green-500 px-4 py-2 rounded-md"
-        onPress={handleLogout}
-      >
-        <Text className="text-white font-bold">Log Out</Text>
-      </TouchableOpacity>
+    <View className="flex-1 bg-gray-100 dark:bg-gray-900 space-y-4">
+      <View className="h-2/3 space-y-4">
+        <View className="bg-white dark:bg-gray-800 shadow-sm p-4 mb-4 m-4 rounded-lg relative">
+          <Text className="text-center text-gray-500 text-2xl mb-4">Ratings</Text>
+ 
+          <TouchableOpacity
+            onPress={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
+          >
+            <Text className="text-gray-700 dark:text-gray-300">
+              {(() => {
+                const selectedUser = house?.users.find(u => u.id === selectedUserId);
+                return selectedUser?.displayName || selectedUser?.email || 'Select User';
+              })()}
+            </Text>
+          </TouchableOpacity>
+        </View>
+ 
+        {isDropdownOpen && (
+          <View className="absolute top-32 left-4 right-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50">
+            {house?.users.map(user => (
+              <TouchableOpacity
+                key={user.id}
+                onPress={() => {
+                  setSelectedUserId(user.id);
+                  setIsDropdownOpen(false);
+                }}
+                className="p-3 border-b border-gray-200 dark:border-gray-600"
+              >
+                <Text className="text-gray-700 dark:text-gray-300">
+                  {user.displayName || user.email}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+ 
+        <View className="bg-white dark:bg-gray-800 shadow-sm p-2 m-4 mb-4 rounded-lg">
+          <Text className="text-center text-gray-500 text-sm mb-4 pt-4">Task Statistics</Text>
+          <View className="flex-row justify-between mt-4 px-4">
+            <View className="items-center">
+              <Text className="text-blue-500 text-2xl font-bold">{userStats.total}</Text>
+              <Text className="text-gray-500 text-sm">Assigned</Text>
+            </View>
+            <View className="items-center">
+              <Text className="text-purple-500 text-2xl font-bold">{userStats.completed}</Text>
+              <Text className="text-gray-500 text-sm">Completed</Text>
+            </View>
+            <View className="items-center">
+              <Text className="text-green-500 text-2xl font-bold">{userStats.onTime}</Text>
+              <Text className="text-gray-500 text-sm">On Time</Text>
+            </View>
+            <View className="items-center">
+              <Text className="text-yellow-500 text-2xl font-bold">{userStats.overdue}</Text>
+              <Text className="text-gray-500 text-sm">Overdue</Text>
+            </View>
+            <View className="items-center">
+              <Text className="text-red-500 text-2xl font-bold">{userStats.missed}</Text>
+              <Text className="text-gray-500 text-sm">Missed</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+      <View className="h-1/3">
+        <View className="bg-white dark:bg-gray-800 shadow-sm p-4 mb-4 m-4 rounded-lg">
+          {user && (
+            <View className="space-y-4">
+              <View className="space-y-1">
+                <Text className="text-sm text-gray-400 dark:text-gray-500">Email</Text>
+                <Text className="text-base text-gray-700 dark:text-gray-200">{user.email}</Text>
+              </View>
+ 
+              <View className="space-y-1">
+                <Text className="text-sm text-gray-400 dark:text-gray-500">Display Name</Text>
+                {isEditing ? (
+                  <View className="space-y-2">
+                    <TextInput
+                      className="w-full bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
+                      value={displayName}
+                      onChangeText={setDisplayName}
+                      placeholder="Enter your name"
+                      placeholderTextColor="#9CA3AF"
+                      editable={!isUpdating}
+                    />
+                    <View className="flex-row space-x-2">
+                      <TouchableOpacity
+                        className={`flex-1 ${isUpdating ? 'bg-blue-400' : 'bg-blue-500'} p-3 rounded-lg`}
+                        onPress={handleUpdateDisplayName}
+                        disabled={isUpdating}
+                      >
+                        <Text className="text-white text-center font-medium">
+                          {isUpdating ? 'Saving...' : 'Save'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        className="flex-1 bg-gray-200 dark:bg-gray-700 p-3 rounded-lg"
+                        onPress={() => setIsEditing(false)}
+                        disabled={isUpdating}
+                      >
+                        <Text className="text-gray-700 dark:text-gray-200 text-center font-medium">Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-base text-gray-700 dark:text-gray-200">
+                      {user.displayName || 'Not set'}
+                    </Text>
+                    <TouchableOpacity
+                      className="bg-gray-100 dark:bg-gray-700 px-4 py-2 rounded-lg"
+                      onPress={() => setIsEditing(true)}
+                    >
+                      <Text className="text-gray-600 dark:text-gray-300">Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity
+            className="bg-red-400 mx-4 px-4 py-2 rounded-md w-1/3 self-center"
+            onPress={handleLogout}
+          >
+            <Text className="text-white font-bold text-center">Log Out</Text>
+        </TouchableOpacity>
+ 
+      </View>
+ 
     </View>
   );
 }
