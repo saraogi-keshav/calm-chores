@@ -6,6 +6,7 @@ import { auth } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
+import Gauge from '@/components/Gauge';
  
 interface Task {
   id: string;
@@ -93,18 +94,15 @@ export default function ProfileScreen() {
         ).length,
  
         completed: tasks.filter(task => 
-          task.completed && (
-            task.completedBy === selectedUserId ||
-            (task.assignedTo === selectedUserId && task.completed)
-          )
+          task.completed && 
+          task.completedBy === selectedUserId
         ).length,
  
         onTime: tasks.filter(task => 
           task.completed && 
-          !task.overdueCompletion && (
-            (task.completedBy === selectedUserId && task.assignedTo !== selectedUserId) ||
-            (task.assignedTo === selectedUserId && task.completedBy === selectedUserId)
-          )
+          !task.overdueCompletion && 
+            (task.completedBy === selectedUserId && task.assignedTo !== selectedUserId) 
+            
         ).length,
  
         overdue: tasks.filter(task => 
@@ -131,6 +129,13 @@ export default function ProfileScreen() {
     fetchUserStats();
   }, [fetchUserStats]);
  
+  const calculateScore = () => {
+    if (userStats.total === 0) return 0;
+    return Math.max(0, 
+      (userStats.completed / userStats.total * 100) - (userStats.overdue / 2)
+    );
+  };
+ 
   return (
     <View className="flex-1 bg-gray-100 dark:bg-gray-900 space-y-4">
       <View className="h-2/3 space-y-4">
@@ -151,7 +156,7 @@ export default function ProfileScreen() {
         </View>
  
         {isDropdownOpen && (
-          <View className="absolute top-32 left-4 right-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50">
+          <View className="absolute top-32 left-4 right-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-30">
             {house?.users.map(user => (
               <TouchableOpacity
                 key={user.id}
@@ -193,6 +198,17 @@ export default function ProfileScreen() {
               <Text className="text-gray-500 text-sm">Missed</Text>
             </View>
           </View>
+          <View className='flex-row justify-between'>
+            <View className="h-32 items-center justify-center my-4 w-2/3">
+              <Gauge 
+                score={calculateScore()} 
+                key={selectedUserId}
+              />
+            </View>
+            <View className="items-center w-1/3">
+              <Text className="text-gray-500 text-sm">Icon</Text>
+            </View>
+          </View>        
         </View>
       </View>
       <View className="h-1/3">

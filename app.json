@@ -30,6 +30,7 @@
       "expo-router",
       "expo-font"
     ],
+    "newArchEnabled": true,
     "experiments": {
       "typedRoutes": true
     }
