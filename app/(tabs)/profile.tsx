@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { signOut, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Gauge from '@/components/Gauge';
  
@@ -80,54 +80,46 @@ export default function ProfileScreen() {
     }
   };
  
-  const fetchUserStats = useCallback(async () => {
+  useEffect(() => {
     if (!house || !selectedUserId) return;
- 
-    try {
-      const tasksRef = collection(db, 'houses', house.id, 'tasks');
-      const tasksSnapshot = await getDocs(tasksRef);
-      const tasks = tasksSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
- 
+
+    // Create real-time subscription to tasks
+    const tasksRef = collection(db, 'houses', house.id, 'tasks');
+    const unsubscribe = onSnapshot(tasksRef, (snapshot) => {
+      const tasks = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
+      
       const stats = {
         total: tasks.filter(task => 
           task.completed && task.assignedTo === selectedUserId
         ).length,
- 
         completed: tasks.filter(task => 
           task.completed && 
           task.completedBy === selectedUserId
         ).length,
- 
         onTime: tasks.filter(task => 
           task.completed && 
           !task.overdueCompletion && 
-            (task.completedBy === selectedUserId && task.assignedTo !== selectedUserId) 
-            
+          (task.completedBy === selectedUserId && task.assignedTo !== selectedUserId)
         ).length,
- 
         overdue: tasks.filter(task => 
           task.completed && 
           task.assignedTo === selectedUserId && 
           task.completedBy === selectedUserId && 
           task.overdueCompletion
         ).length,
- 
         missed: tasks.filter(task => 
           task.completed && 
           task.assignedTo === selectedUserId && 
           task.completedBy !== selectedUserId
         ).length
       };
- 
+
       setUserStats(stats);
-    } catch (error) {
-      console.error('Error fetching user stats:', error);
-    }
+    });
+
+    // Cleanup subscription
+    return () => unsubscribe();
   }, [house?.id, selectedUserId]);
- 
-  useEffect(() => {
-    fetchUserStats();
-  }, [fetchUserStats]);
  
   const calculateScore = () => {
     if (userStats.total === 0) return 0;
@@ -176,7 +168,7 @@ export default function ProfileScreen() {
  
         <View className="bg-white dark:bg-gray-800 shadow-sm p-2 m-4 mb-4 rounded-lg">
           <Text className="text-center text-gray-500 text-sm mb-4 pt-4">Task Statistics</Text>
-          <View className="flex-row justify-between mt-4 px-4">
+          <View className="flex-row justify-between mt-4 px-4" key={JSON.stringify(userStats)}>
             <View className="items-center">
               <Text className="text-blue-500 text-2xl font-bold">{userStats.total}</Text>
               <Text className="text-gray-500 text-sm">Assigned</Text>
@@ -202,11 +194,37 @@ export default function ProfileScreen() {
             <View className="h-32 items-center justify-center my-4 w-2/3">
               <Gauge 
                 score={calculateScore()} 
-                key={selectedUserId}
+                key={`${selectedUserId}-${JSON.stringify(userStats)}`}
               />
             </View>
-            <View className="items-center w-1/3">
-              <Text className="text-gray-500 text-sm">Icon</Text>
+            <View className="items-center justify-center pt-4 w-1/3">
+              <View className={`rounded-full p-1.5 mb-1 ${
+                calculateScore() < 50 
+                  ? 'bg-red-400'
+                  : calculateScore() <= 100
+                    ? 'bg-green-400'
+                    : 'bg-purple-400'
+              }`}>
+                <Image 
+                  source={
+                    calculateScore() < 50 
+                      ? require('../../assets/images/thief.png')
+                      : calculateScore() <= 100
+                        ? require('../../assets/images/police.png') 
+                        : require('../../assets/images/soldier.png')
+                  }
+                  className="w-16 h-16 opacity-50 rounded-full"
+                />
+              </View>
+              <Text className="text-gray-500 text-xs text-center">Rank</Text>
+              <Text className="text-gray-500 text-sm text-center font-bold">
+                {calculateScore() < 50 
+                  ? 'CalmChore'
+                  : calculateScore() <= 100
+                    ? 'Police'
+                    : 'Soldier'
+                }
+              </Text>
             </View>
           </View>        
         </View>

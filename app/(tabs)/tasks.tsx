@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
-import { collection, getDocs, query, where, updateDoc, deleteDoc, doc, addDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, updateDoc, deleteDoc, doc, addDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
@@ -34,35 +34,33 @@ export default function TasksScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCompletingTask, setIsCompletingTask] = useState(false);
 
-  const fetchTasks = useCallback(async () => {
-    if (!user || !house || isLoading) return;
-    
-    setIsLoading(true);
-    try {
-      const tasksRef = collection(db, 'houses', house.id, 'tasks');
-      const q = query(tasksRef);
-      const querySnapshot = await getDocs(q);
-      
-      const fetchedTasks: Task[] = [];
-      querySnapshot.forEach((doc) => {
-        fetchedTasks.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Task);
-      });
-      
-      setTasks(fetchedTasks);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.uid, house?.id]);
-
   useEffect(() => {
-    if (user?.uid && house?.id) {
-      fetchTasks();
-    }
+    if (!user?.uid || !house?.id) return;
+
+    setIsLoading(true);
+    
+    // Create real-time listener
+    const tasksRef = collection(db, 'houses', house.id, 'tasks');
+    const unsubscribe = onSnapshot(tasksRef, 
+      (snapshot) => {
+        const fetchedTasks: Task[] = [];
+        snapshot.forEach((doc) => {
+          fetchedTasks.push({
+            id: doc.id,
+            ...doc.data(),
+          } as Task);
+        });
+        setTasks(fetchedTasks);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error('Error listening to tasks:', error);
+        setIsLoading(false);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, [user?.uid, house?.id]);
 
   const handleToggleComplete = async (taskId: string, currentStatus: boolean) => {
@@ -117,8 +115,6 @@ export default function TasksScreen() {
           });
         }
       }
-      
-      await fetchTasks();
     } catch (error) {
       console.error('Error updating task:', error);
       Alert.alert("Error", "Failed to complete task. Please try again.");
@@ -149,8 +145,8 @@ export default function TasksScreen() {
   }, [tasks, selectedTab, user?.uid]);
 
   const handleRefresh = useCallback(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+    // Keep this empty or add other refresh logic if needed
+  }, []);
 
   if (!house) {
     return (
