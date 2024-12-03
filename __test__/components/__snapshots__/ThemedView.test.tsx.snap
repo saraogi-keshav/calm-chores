@@ -1,0 +1,42 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ThemedView applies custom lightColor and darkColor 1`] = `
+<View
+  style={
+    [
+      {
+        "backgroundColor": "#ffffff",
+      },
+      undefined,
+    ]
+  }
+/>
+`;
+
+exports[`ThemedView applies custom styles 1`] = `
+<View
+  style={
+    [
+      {
+        "backgroundColor": "#fff",
+      },
+      {
+        "padding": 10,
+      },
+    ]
+  }
+/>
+`;
+
+exports[`ThemedView renders correctly with default props 1`] = `
+<View
+  style={
+    [
+      {
+        "backgroundColor": "#fff",
+      },
+      undefined,
+    ]
+  }
+/>
+`;
