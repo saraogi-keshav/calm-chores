@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Image } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput} from 'react-native';
 import { useRouter } from 'expo-router';
 import { signOut, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
@@ -7,6 +7,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { collection, getDocs, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Gauge from '@/components/Gauge';
+import { Image } from 'expo-image';
+
  
 interface Task {
   id: string;
@@ -214,6 +216,9 @@ export default function ProfileScreen() {
                         : require('../../assets/images/soldier.png')
                   }
                   className="w-16 h-16 opacity-50 rounded-full"
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="memory"
                 />
               </View>
               <Text className="text-gray-500 text-xs text-center">Rank</Text>

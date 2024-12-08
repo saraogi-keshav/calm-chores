@@ -1,74 +1,79 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
-import { collection, addDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { useAuth } from '../contexts/AuthContext';
-import { useRouter } from 'expo-router';
- 
+import React, { useState } from "react";
+import { View, Text, TextInput, TouchableOpacity } from "react-native";
+import { collection, addDoc, doc, setDoc, updateDoc } from "firebase/firestore";
+import { db } from "../firebase";
+import { useAuth } from "../contexts/AuthContext";
+import { useRouter } from "expo-router";
+
 export default function AddHouseScreen() {
-  const [houseName, setHouseName] = useState('');
+  const [houseName, setHouseName] = useState("");
   const { user, setHouse } = useAuth();
   const router = useRouter();
- 
+
   const handleAddHouse = async () => {
     if (!user) {
-      console.error('User not authenticated');
+      console.error("User not authenticated");
       return;
     }
- 
+
     try {
- 
-      const houseRef = await addDoc(collection(db, 'houses'), {
+      const houseRef = await addDoc(collection(db, "houses"), {
         name: houseName,
         ownerId: user.uid,
         createdAt: new Date().toISOString(),
-        users: [{
-          id: user.uid,
-          email: user.email || '',
-          displayName: user.displayName || '',
-          photoURL: user.photoURL || null,
-        }],
+        users: [
+          {
+            id: user.uid,
+            email: user.email || "",
+            displayName: user.displayName || "",
+            photoURL: user.photoURL || null,
+            vacationMode: false,
+          },
+        ],
         areas: ["Common Area", "Kitchen", "Living Area"],
       });
- 
- 
-      const tasksCollectionRef = collection(db, 'houses', houseRef.id, 'tasks');
-      await setDoc(doc(tasksCollectionRef, 'initial-task'), {
-        title: 'Welcome to your new house!',
-        description: 'Start by adding some tasks for your household.',
+
+      const tasksCollectionRef = collection(db, "houses", houseRef.id, "tasks");
+      await setDoc(doc(tasksCollectionRef, "initial-task"), {
+        title: "Welcome to your new house!",
+        description: "Start by adding some tasks for your household.",
         createdAt: new Date().toISOString(),
         createdBy: user.uid,
       });
- 
- 
-      const userRef = doc(db, 'users', user.uid);
+
+      const userRef = doc(db, "users", user.uid);
       await updateDoc(userRef, {
         house: houseRef.id,
-        houseName: houseName 
+        houseName: houseName,
       });
- 
- 
+
       setHouse({
         id: houseRef.id,
         name: houseName,
-        users: [{
-          id: user.uid,
-          email: user.email || '',
-          displayName: user.displayName || ''
-        }],
-        areas: ["Common Area", "Kitchen", "Living Area"]
+        users: [
+          {
+            id: user.uid,
+            email: user.email || "",
+            displayName: user.displayName || "",
+            photoURL: user.photoURL || null,
+            vacationMode: false,
+          },
+        ],
+        areas: ["Common Area", "Kitchen", "Living Area"],
       });
- 
-      console.log('House created and user updated successfully');
-      router.back(); 
+
+      console.log("House created and user updated successfully");
+      router.back();
     } catch (error) {
-      console.error('Error adding house: ', error);
+      console.error("Error adding house: ", error);
     }
   };
- 
+
   return (
     <View className="flex-1 justify-center items-center bg-gray-100 dark:bg-gray-900 p-4">
-      <Text className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-6">Add New House</Text>
+      <Text className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-6">
+        Add New House
+      </Text>
       <TextInput
         className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md p-2 mb-4 text-black dark:text-white"
         placeholder="House Name"
